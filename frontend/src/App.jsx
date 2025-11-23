@@ -16,13 +16,13 @@ function App() {
           <Route index element={<Portfolio />} />
           <Route path="/portfolio" element={<Portfolio />} />
           <Route path="/stocks" element={<StockMetrics />} />
-          <Route path="/standings" element={<Standings />} />
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
 
           {/* 👇 Catch-all 404 lives INSIDE the Layout */}
           <Route path="*" element={<Error404 />} />
         </Route>
+        <Route path="/standings" element={<Standings />} />
       </Routes>
     </Router>
   );
