@@ -7,7 +7,8 @@ const Header = () => {
 
   const navItems = [
     { path: "/portfolio", label: "Portfolio" },
-    { path: "/metrics", label: "Metrics" },
+    { path: "/stocks", label: "Stocks" },
+    { path: "/standings", label: "Standings" },
   ];
 
   return (
@@ -15,7 +16,7 @@ const Header = () => {
       <div className="nav-container">
         <NavLink to="/" className="brand">
           <img src={logo} alt="EuroPitch Logo" className="logo" />
-          <span className="brand-text">EuroPitch</span>
+          <span className="brand-text"></span>
         </NavLink>
 
         <button
