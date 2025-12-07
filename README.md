@@ -1,8 +1,8 @@
-# Stirling Student Managed Investment Fund Portfolio Manager
+# EuroPitch Trading Software
 
 ## Introduction
 
-Welcome to the Portfolio Manager for the Stirling Student Managed Investment Fund. This Python-based tool is designed to streamline and enhance the management of our investment portfolio. This project aims to be a valuable resource for members of the SMIF interested in computer science and intended to provide a gateway to working with Python in finance.
+Welcome to the Trading Software for EuroPitch. This Python-based tool is designed to streamline and enhance the management of our investment portfolio. This project aims to be a valuable resource for members of the SMIF interested in computer science and intended to provide a gateway to working with Python in finance.
 
 ### Features
 
@@ -32,7 +32,7 @@ This get the latest exchange rate data from the ECB's published historical data.
 
 ## Installation and Setup
 
-To set up the Portfolio Manager, follow these steps:
+To set up the Trading Software, follow these steps:
 
 1. Clone the repository:
 
@@ -56,4 +56,4 @@ To set up the Portfolio Manager, follow these steps:
 
 ## Contributors
 
-This Project was created by Maciej Miazek (mam00961@students.stir.ac.uk)
+This Project was created by Maciej Miazek (mam00961@students.stir.ac.uk), further developed by Raj Aryan Upadhyaya (upadhyra@tcd.ie)
