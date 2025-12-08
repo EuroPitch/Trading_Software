@@ -3,6 +3,8 @@ import StockDetailModal from './StockDetailModal';
 import ComparisonPanel from './ComparisonPanel';
 import './StockMetrics.css';
 
+const UNIVERSE = ['AAPL', 'MSFT', 'JPM', 'JNJ', 'TSLA']; // extend this for your competition
+
 export default function StockMetrics() {
   const [stocks, setStocks] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -11,173 +13,14 @@ export default function StockMetrics() {
   const [compareMode, setCompareMode] = useState(false);
   const [selectedForCompare, setSelectedForCompare] = useState([]);
   const [visibleColumns, setVisibleColumns] = useState([
-    'symbol', 'name', 'price', 'change', 'changePercent', 'marketCap', 
+    'symbol', 'name', 'price', 'change', 'changePercent', 'marketCap',
     'peRatio', 'volume', 'rsi', 'dividendYield'
   ]);
   const [showColumnCustomizer, setShowColumnCustomizer] = useState(false);
   const [sectorFilter, setSectorFilter] = useState('all');
   const [loading, setLoading] = useState(true);
 
-  // Mock data - replace with your API endpoint
-  useEffect(() => {
-    setTimeout(() => {
-      const mockStocks = [
-        {
-          id: 1,
-          symbol: 'AAPL',
-          name: 'Apple Inc.',
-          sector: 'Technology',
-          price: 185.50,
-          change: 2.50,
-          changePercent: 1.37,
-          marketCap: 2890000000000,
-          volume: 52340000,
-          peRatio: 29.5,
-          pbRatio: 45.2,
-          pegRatio: 2.8,
-          dividendYield: 0.52,
-          roe: 147.3,
-          roa: 27.8,
-          debtToEquity: 1.97,
-          currentRatio: 0.98,
-          quickRatio: 0.83,
-          grossMargin: 43.8,
-          operatingMargin: 29.8,
-          netMargin: 25.3,
-          revenueGrowth: 8.6,
-          earningsGrowth: 13.4,
-          rsi: 58.3,
-          beta: 1.28,
-          fiftyTwoWeekHigh: 199.62,
-          fiftyTwoWeekLow: 164.08,
-          avgVolume: 54200000
-        },
-        {
-          id: 2,
-          symbol: 'MSFT',
-          name: 'Microsoft Corporation',
-          sector: 'Technology',
-          price: 378.90,
-          change: -3.20,
-          changePercent: -0.84,
-          marketCap: 2820000000000,
-          volume: 28670000,
-          peRatio: 35.8,
-          pbRatio: 13.2,
-          pegRatio: 2.3,
-          dividendYield: 0.78,
-          roe: 42.6,
-          roa: 18.4,
-          debtToEquity: 0.45,
-          currentRatio: 1.77,
-          quickRatio: 1.73,
-          grossMargin: 69.8,
-          operatingMargin: 41.5,
-          netMargin: 34.1,
-          revenueGrowth: 12.7,
-          earningsGrowth: 18.2,
-          rsi: 52.1,
-          beta: 0.89,
-          fiftyTwoWeekHigh: 398.35,
-          fiftyTwoWeekLow: 309.45,
-          avgVolume: 31200000
-        },
-        {
-          id: 3,
-          symbol: 'JPM',
-          name: 'JPMorgan Chase & Co.',
-          sector: 'Financials',
-          price: 158.30,
-          change: 1.85,
-          changePercent: 1.18,
-          marketCap: 454000000000,
-          volume: 12450000,
-          peRatio: 11.2,
-          pbRatio: 1.8,
-          pegRatio: 1.5,
-          dividendYield: 2.41,
-          roe: 16.8,
-          roa: 1.3,
-          debtToEquity: 1.32,
-          currentRatio: 0.92,
-          quickRatio: 0.88,
-          grossMargin: 62.3,
-          operatingMargin: 38.7,
-          netMargin: 31.2,
-          revenueGrowth: 6.4,
-          earningsGrowth: 11.8,
-          rsi: 64.7,
-          beta: 1.15,
-          fiftyTwoWeekHigh: 168.42,
-          fiftyTwoWeekLow: 135.19,
-          avgVolume: 13800000
-        },
-        {
-          id: 4,
-          symbol: 'JNJ',
-          name: 'Johnson & Johnson',
-          sector: 'Healthcare',
-          price: 162.45,
-          change: 0.75,
-          changePercent: 0.46,
-          marketCap: 387000000000,
-          volume: 8920000,
-          peRatio: 24.3,
-          pbRatio: 5.9,
-          pegRatio: 3.2,
-          dividendYield: 3.12,
-          roe: 24.8,
-          roa: 10.2,
-          debtToEquity: 0.58,
-          currentRatio: 1.32,
-          quickRatio: 0.97,
-          grossMargin: 68.4,
-          operatingMargin: 24.6,
-          netMargin: 18.7,
-          revenueGrowth: 5.3,
-          earningsGrowth: 7.6,
-          rsi: 48.9,
-          beta: 0.62,
-          fiftyTwoWeekHigh: 172.89,
-          fiftyTwoWeekLow: 143.56,
-          avgVolume: 9600000
-        },
-        {
-          id: 5,
-          symbol: 'TSLA',
-          name: 'Tesla, Inc.',
-          sector: 'Consumer Discretionary',
-          price: 242.80,
-          change: -5.40,
-          changePercent: -2.18,
-          marketCap: 772000000000,
-          volume: 118340000,
-          peRatio: 67.3,
-          pbRatio: 15.8,
-          pegRatio: 4.1,
-          dividendYield: 0.00,
-          roe: 23.5,
-          roa: 9.8,
-          debtToEquity: 0.17,
-          currentRatio: 1.73,
-          quickRatio: 1.28,
-          grossMargin: 18.2,
-          operatingMargin: 9.2,
-          netMargin: 8.4,
-          revenueGrowth: 18.8,
-          earningsGrowth: 27.3,
-          rsi: 45.2,
-          beta: 2.04,
-          fiftyTwoWeekHigh: 299.29,
-          fiftyTwoWeekLow: 138.80,
-          avgVolume: 125600000
-        }
-      ];
-      
-      setStocks(mockStocks);
-      setLoading(false);
-    }, 500);
-  }, []);
+  const API_BASE_URL = 'http://localhost:8000'; // change if needed
 
   const allColumns = [
     { key: 'symbol', label: 'Symbol', format: 'text' },
@@ -205,16 +48,95 @@ export default function StockMetrics() {
     { key: 'beta', label: 'Beta', format: 'decimal' }
   ];
 
+  // Fetch on mount + background refresh every 5s without UI flicker
+  useEffect(() => {
+    let isFirst = true;
+    let intervalId;
+
+    const fetchStocks = async () => {
+      try {
+        if (isFirst) setLoading(true);
+
+        const params = new URLSearchParams();
+        UNIVERSE.forEach(sym => params.append('symbols', sym));
+
+        const res = await fetch(`${API_BASE_URL}/equities/quotes?${params.toString()}`);
+        if (!res.ok) {
+          throw new Error(`HTTP error ${res.status}`);
+        }
+
+        const json = await res.json();
+        // json.data = { "0": { ...AAPL }, "1": { ...MSFT }, ... }
+        const rows = Object.values(json.data || {});
+
+        const stocksArray = rows.map((row, idx) => ({
+          id: idx + 1,
+          symbol: row.symbol || '',
+          name: row.name || row.symbol || '',
+          sector: row.sector || 'Unknown',
+          price: row.last_price || row.bid || row.ask || 0,
+          change:
+            row.last_price && row.prev_close
+              ? row.last_price - row.prev_close
+              : 0,
+          changePercent:
+            row.last_price && row.prev_close
+              ? ((row.last_price - row.prev_close) / row.prev_close) * 100
+              : 0,
+          marketCap: row.market_cap || 0,
+          volume: row.volume || 0,
+          peRatio: row.pe_ratio || null,
+          pbRatio: row.pb_ratio || null,
+          pegRatio: row.peg_ratio || null,
+          dividendYield: row.dividend_yield || null,
+          roe: row.roe || null,
+          roa: row.roa || null,
+          debtToEquity: row.debt_to_equity || null,
+          currentRatio: row.current_ratio || null,
+          quickRatio: row.quick_ratio || null,
+          grossMargin: row.gross_margin || null,
+          operatingMargin: row.operating_margin || null,
+          netMargin: row.net_margin || null,
+          revenueGrowth: row.revenue_growth || null,
+          earningsGrowth: row.earnings_growth || null,
+          rsi: row.rsi || null,
+          beta: row.beta || null,
+          fiftyTwoWeekHigh: row.year_high || null,
+          fiftyTwoWeekLow: row.year_low || null,
+          avgVolume: row.volume_average || null
+        }));
+
+        setStocks(stocksArray);
+      } catch (err) {
+        console.error('Failed to load market data', err);
+      } finally {
+        if (isFirst) {
+          setLoading(false);
+          isFirst = false;
+        }
+      }
+    };
+
+    // Initial load
+    fetchStocks();
+    // Background refresh every 5 seconds
+    intervalId = setInterval(fetchStocks, 5000);
+
+    return () => {
+      clearInterval(intervalId);
+    };
+  }, [API_BASE_URL]);
+
   const sectors = ['all', ...new Set(stocks.map(s => s.sector))];
 
   const filteredAndSortedStocks = useMemo(() => {
     let filtered = stocks.filter(stock => {
-      const matchesSearch = 
+      const matchesSearch =
         stock.symbol.toLowerCase().includes(searchTerm.toLowerCase()) ||
         stock.name.toLowerCase().includes(searchTerm.toLowerCase());
-      
+
       const matchesSector = sectorFilter === 'all' || stock.sector === sectorFilter;
-      
+
       return matchesSearch && matchesSector;
     });
 
@@ -222,7 +144,7 @@ export default function StockMetrics() {
       filtered.sort((a, b) => {
         const aVal = a[sortConfig.key];
         const bVal = b[sortConfig.key];
-        
+
         if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
         if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
         return 0;
@@ -242,8 +164,8 @@ export default function StockMetrics() {
 
   const formatValue = (value, format) => {
     if (value === null || value === undefined) return '-';
-    
-    switch(format) {
+
+    switch (format) {
       case 'currency':
         return new Intl.NumberFormat('en-US', {
           style: 'currency',
@@ -251,24 +173,24 @@ export default function StockMetrics() {
           minimumFractionDigits: 2,
           maximumFractionDigits: 2
         }).format(value);
-      
+
       case 'marketCap':
         if (value >= 1e12) return `$${(value / 1e12).toFixed(2)}T`;
         if (value >= 1e9) return `$${(value / 1e9).toFixed(2)}B`;
         if (value >= 1e6) return `$${(value / 1e6).toFixed(2)}M`;
         return `$${value.toFixed(0)}`;
-      
+
       case 'volume':
         if (value >= 1e6) return `${(value / 1e6).toFixed(2)}M`;
         if (value >= 1e3) return `${(value / 1e3).toFixed(2)}K`;
         return value.toLocaleString();
-      
+
       case 'percent':
         return `${value.toFixed(2)}%`;
-      
+
       case 'decimal':
         return value.toFixed(2);
-      
+
       default:
         return value;
     }
@@ -299,7 +221,6 @@ export default function StockMetrics() {
   const toggleColumnVisibility = (columnKey) => {
     setVisibleColumns(prev => {
       if (prev.includes(columnKey)) {
-        // Don't allow hiding symbol and name
         if (columnKey === 'symbol' || columnKey === 'name') return prev;
         return prev.filter(key => key !== columnKey);
       }
@@ -311,7 +232,7 @@ export default function StockMetrics() {
     const headers = allColumns
       .filter(col => visibleColumns.includes(col.key))
       .map(col => col.label);
-    
+
     const rows = filteredAndSortedStocks.map(stock =>
       allColumns
         .filter(col => visibleColumns.includes(col.key))
@@ -345,13 +266,13 @@ export default function StockMetrics() {
         <div className="header-top">
           <h1>Market Metrics & Analysis</h1>
           <div className="header-actions">
-            <button 
+            <button
               className={`btn-compare ${compareMode ? 'active' : ''}`}
               onClick={() => setCompareMode(!compareMode)}
             >
               {compareMode ? 'Exit Compare Mode' : 'Compare Stocks'}
             </button>
-            <button 
+            <button
               className="btn-secondary"
               onClick={() => setShowColumnCustomizer(!showColumnCustomizer)}
             >
@@ -366,7 +287,7 @@ export default function StockMetrics() {
         <div className="filters-row">
           <div className="search-box">
             <svg className="search-icon" width="20" height="20" viewBox="0 0 20 20" fill="none">
-              <path d="M9 17A8 8 0 1 0 9 1a8 8 0 0 0 0 16zM19 19l-4.35-4.35" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M9 17A8 8 0 1 0 9 1a8 8 0 0 0 0 16zM19 19l-4.35-4.35" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
             <input
               type="text"
@@ -377,7 +298,7 @@ export default function StockMetrics() {
             />
           </div>
 
-          <select 
+          <select
             className="sector-filter"
             value={sectorFilter}
             onChange={(e) => setSectorFilter(e.target.value)}
@@ -398,7 +319,7 @@ export default function StockMetrics() {
           <div className="column-customizer">
             <div className="customizer-header">
               <h3>Customize Visible Columns</h3>
-              <button 
+              <button
                 className="btn-close"
                 onClick={() => setShowColumnCustomizer(false)}
               >
@@ -430,7 +351,7 @@ export default function StockMetrics() {
               {allColumns
                 .filter(col => visibleColumns.includes(col.key))
                 .map(column => (
-                  <th 
+                  <th
                     key={column.key}
                     onClick={() => requestSort(column.key)}
                     className={`sortable ${sortConfig.key === column.key ? 'active' : ''}`}
@@ -457,14 +378,17 @@ export default function StockMetrics() {
                       type="checkbox"
                       checked={selectedForCompare.includes(stock.id)}
                       onChange={() => handleCompareToggle(stock.id)}
-                      disabled={!selectedForCompare.includes(stock.id) && selectedForCompare.length >= 5}
+                      disabled={
+                        !selectedForCompare.includes(stock.id) &&
+                        selectedForCompare.length >= 5
+                      }
                     />
                   </td>
                 )}
                 {allColumns
                   .filter(col => visibleColumns.includes(col.key))
                   .map(column => (
-                    <td 
+                    <td
                       key={column.key}
                       className={`${column.key}-cell ${getCellClassName(column.key, stock[column.key])}`}
                     >
