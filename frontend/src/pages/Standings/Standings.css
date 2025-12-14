@@ -27,13 +27,13 @@
 .header-content h1 {
   font-size: 28px;
   font-weight: 700;
-  color: var(--text);
+  color: #ffffff; /* darker for visibility */
   margin: 0 0 8px 0;
 }
 
 .header-subtitle {
   font-size: 15px;
-  color: var(--muted);
+  color: #374151; /* visible muted color */
   margin: 0;
 }
 
@@ -87,7 +87,8 @@
 }
 
 .podium-card {
-  background: var(--panel);
+  background: #ffffff; /* ensure high contrast */
+  color: #0b1220;
   border-radius: 12px;
   padding: 24px;
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
@@ -102,17 +103,14 @@
 
 .podium-card.rank-1 {
   border-color: #fbbf24;
-  background: linear-gradient(135deg, #2b2107 0%, var(--panel) 100%);
 }
 
 .podium-card.rank-2 {
   border-color: #9ca3af;
-  background: linear-gradient(135deg, #111317 0%, var(--panel) 100%);
 }
 
 .podium-card.rank-3 {
   border-color: #cd7f32;
-  background: linear-gradient(135deg, #2b1708 0%, var(--panel) 100%);
 }
 
 .podium-card.current-user {
@@ -134,8 +132,8 @@
   width: 64px;
   height: 64px;
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--brand) 0%, var(--brand-ink) 100%);
-  color: var(--text);
+  background: linear-gradient(135deg, #2563eb 0%, #9333ea 100%);
+  color: white;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -147,13 +145,13 @@
 .podium-user h3 {
   font-size: 18px;
   font-weight: 600;
-  color: var(--text);
+  color: #0b1220;
   margin: 0 0 4px 0;
 }
 
 .podium-username {
   font-size: 14px;
-  color: var(--muted);
+  color: #6b7280;
   margin: 0;
 }
 
@@ -184,14 +182,14 @@
 
 .stat-label {
   font-size: 13px;
-  color: var(--muted);
+  color: #4b5563;
   font-weight: 500;
 }
 
 .stat-value {
   font-size: 15px;
   font-weight: 600;
-  color: var(--text);
+  color: #0b1220;
 }
 
 .stat-value-large {
@@ -201,7 +199,7 @@
 
 /* Your Position Card */
 .your-position-card {
-  background: linear-gradient(135deg, var(--brand) 0%, var(--brand-ink) 100%);
+  background: linear-gradient(135deg, #2563eb 0%, #7c3aed 100%);
   border-radius: 12px;
   padding: 24px;
   margin-bottom: 32px;
@@ -268,12 +266,12 @@
 .standings-table-section h2 {
   font-size: 20px;
   font-weight: 600;
-  color: #111827;
+  color: #0b1220;
   margin-bottom: 20px;
 }
 
 .table-wrapper {
-  background: var(--panel);
+  background: #ffffff;
   border-radius: 12px;
   overflow: hidden;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
@@ -286,15 +284,15 @@
 }
 
 .standings-table thead {
-  background: rgba(255,255,255,0.03);
-  border-bottom: 2px solid rgba(255,255,255,0.04);
+  background: #f3f4f6;
+  border-bottom: 2px solid #e5e7eb;
 }
 
 .standings-table th {
   padding: 14px 16px;
   text-align: left;
   font-weight: 600;
-  color: var(--muted);
+  color: #6b7280;
   text-transform: uppercase;
   font-size: 11px;
   letter-spacing: 0.5px;
@@ -384,7 +382,7 @@
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #2563eb 0%, #9333ea 100%);
   color: white;
   display: flex;
   align-items: center;
@@ -402,12 +400,12 @@
 
 .trader-info strong {
   font-size: 14px;
-  color: #111827;
+  color: #0b1220;
 }
 
 .trader-username {
   font-size: 12px;
-  color: #6b7280;
+  color: #4b5563;
 }
 
 .you-badge {

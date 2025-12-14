@@ -14,8 +14,8 @@ export default function Standings() {
         {
           id: 1,
           rank: 1,
-          username: 'TradeMaster_Pro',
-          displayName: 'Alex Morgan',
+          username: 'ASTRA',
+          displayName: 'Astra Investment Collective',
           portfolioValue: 1245680.50,
           totalReturn: 245680.50,
           returnPercent: 24.57,
@@ -28,8 +28,8 @@ export default function Standings() {
         {
           id: 2,
           rank: 2,
-          username: 'QuantQueen',
-          displayName: 'Sarah Chen',
+          username: 'NOVA_TRD',
+          displayName: 'Nova Trading Guild',
           portfolioValue: 1198340.25,
           totalReturn: 198340.25,
           returnPercent: 19.83,
@@ -42,8 +42,8 @@ export default function Standings() {
         {
           id: 3,
           rank: 3,
-          username: 'YourUsername',
-          displayName: 'You',
+          username: 'PIONEER_CC',
+          displayName: 'Pioneer Capital Club',
           portfolioValue: 1156720.00,
           totalReturn: 156720.00,
           returnPercent: 15.67,
@@ -56,8 +56,8 @@ export default function Standings() {
         {
           id: 4,
           rank: 4,
-          username: 'ValueInvestor',
-          displayName: 'Michael Roberts',
+          username: 'HORIZON_MG',
+          displayName: 'Horizon Markets Group',
           portfolioValue: 1134590.75,
           totalReturn: 134590.75,
           returnPercent: 13.46,
@@ -70,8 +70,8 @@ export default function Standings() {
         {
           id: 5,
           rank: 5,
-          username: 'TechBull2025',
-          displayName: 'James Wilson',
+          username: 'ARCADIA',
+          displayName: 'Arcadia Finance Collective',
           portfolioValue: 1121450.50,
           totalReturn: 121450.50,
           returnPercent: 12.15,
@@ -84,8 +84,8 @@ export default function Standings() {
         {
           id: 6,
           rank: 6,
-          username: 'DividendKing',
-          displayName: 'Robert Taylor',
+          username: 'ORION_TRD',
+          displayName: "Orion Traders Network",
           portfolioValue: 1098230.00,
           totalReturn: 98230.00,
           returnPercent: 9.82,
@@ -98,8 +98,8 @@ export default function Standings() {
         {
           id: 7,
           rank: 7,
-          username: 'MomentumTrader',
-          displayName: 'Emily Davis',
+          username: 'MERIDIAN',
+          displayName: 'Meridian Investment Collective',
           portfolioValue: 1087560.25,
           totalReturn: 87560.25,
           returnPercent: 8.76,
@@ -112,8 +112,8 @@ export default function Standings() {
         {
           id: 8,
           rank: 8,
-          username: 'GrowthHunter',
-          displayName: 'David Martinez',
+          username: 'VERTEX',
+          displayName: 'Vertex Trading Syndicate',
           portfolioValue: 1072890.50,
           totalReturn: 72890.50,
           returnPercent: 7.29,
@@ -126,8 +126,8 @@ export default function Standings() {
         {
           id: 9,
           rank: 9,
-          username: 'IndexFollower',
-          displayName: 'Lisa Anderson',
+          username: 'CATALYST',
+          displayName: 'Catalyst Investment Circle',
           portfolioValue: 1065340.75,
           totalReturn: 65340.75,
           returnPercent: 6.53,
@@ -140,8 +140,8 @@ export default function Standings() {
         {
           id: 10,
           rank: 10,
-          username: 'SwingTrader_X',
-          displayName: 'Chris Thompson',
+          username: 'SUMMIT',
+          displayName: 'Summit Capital Collective',
           portfolioValue: 1058920.00,
           totalReturn: 58920.00,
           returnPercent: 5.89,
@@ -214,8 +214,8 @@ export default function Standings() {
     <div className="standings-container">
       <div className="standings-header">
         <div className="header-content">
-          <h1>Competition Standings</h1>
-          <p className="header-subtitle">Track your performance against other traders</p>
+          <h1>Society Standings</h1>
+          <p className="header-subtitle">Track your society's performance against other societies</p>
         </div>
         
         <div className="timeframe-selector">
@@ -248,7 +248,7 @@ export default function Standings() {
 
       {/* Top 3 Podium */}
       <div className="podium-section">
-        <h2>Top Performers</h2>
+        <h2>Top Societies</h2>
         <div className="podium-cards">
           {topPerformers.map((trader) => (
             <div 
@@ -263,7 +263,7 @@ export default function Standings() {
               </div>
               <div className="podium-stats">
                 <div className="podium-stat">
-                  <span className="stat-label">Portfolio Value</span>
+                  <span className="stat-label">Funds</span>
                   <span className="stat-value">{formatCurrency(trader.portfolioValue)}</span>
                 </div>
                 <div className="podium-stat">
@@ -288,7 +288,7 @@ export default function Standings() {
       {currentUser && currentUser.rank > 3 && (
         <div className="your-position-card">
           <div className="position-header">
-            <h3>Your Current Position</h3>
+            <h3>Your Society's Position</h3>
             <span className="rank-badge">#{currentUser.rank}</span>
           </div>
           <div className="position-stats">
@@ -309,7 +309,7 @@ export default function Standings() {
               </span>
             </div>
             <div className="position-stat">
-              <span className="stat-label">Win Rate</span>
+              <span className="stat-label">Success Rate</span>
               <span className="stat-value">{currentUser.winRate.toFixed(1)}%</span>
             </div>
           </div>
@@ -324,8 +324,8 @@ export default function Standings() {
             <thead>
               <tr>
                 <th>Rank</th>
-                <th>Trader</th>
-                <th className="align-right">Portfolio Value</th>
+                <th>Society</th>
+                <th className="align-right">Funds</th>
                 <th className="align-right">Total Return</th>
                 <th className="align-right">Return %</th>
                 <th className="align-right">Win Rate</th>
@@ -353,7 +353,7 @@ export default function Standings() {
                         <span className="trader-username">@{trader.username}</span>
                       </div>
                       {trader.id === currentUserId && (
-                        <span className="you-badge">You</span>
+                        <span className="you-badge">Your Society</span>
                       )}
                     </div>
                   </td>
