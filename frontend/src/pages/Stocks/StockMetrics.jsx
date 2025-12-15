@@ -20,7 +20,7 @@ export default function StockMetrics() {
   const [sectorFilter, setSectorFilter] = useState('all');
   const [loading, setLoading] = useState(true);
 
-  const API_BASE_URL = 'http://localhost:8000'; // change if needed
+  const API_BASE_URL = 'https://europitch-trading-prices.vercel.app'; // change if needed
 
   const allColumns = [
     { key: 'symbol', label: 'Symbol', format: 'text' },

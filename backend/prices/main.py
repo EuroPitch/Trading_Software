@@ -20,6 +20,10 @@ class QuotesResponse(BaseModel):
     symbols: List[str]
     data: dict  # {symbol: {field: value}}
 
+@app.get("/", response_description="API alive!")
+async def root():
+    return {"status": "alive"}
+
 @app.get("/equities/quotes", response_model=QuotesResponse)
 def get_equity_quotes(
     symbols: List[str] = Query(..., description="Repeat ?symbols= for each ticker"),

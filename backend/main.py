@@ -4,12 +4,12 @@ import openpyxl
 import pandas as pd
 import pickle
 import xlsxwriter
-from data_download import (
+from backend.prices.data_download import (
     download_data_for_tickers,
     load_saved_data,
     load_saved_exchange_rates
 )
-from data_retrieval import (
+from backend.prices.data_retrieval import (
     calculate_cash_position,
     calculate_daily_cash_position,
     calculate_daily_dividends,
