@@ -53,69 +53,67 @@ export default function StockMetrics() {
     let isFirst = true;
     let intervalId;
 
-    const fetchStocks = async () => {
-      try {
-        if (isFirst) setLoading(true);
+  const fetchStocks = async () => {
+  try {
+    if (isFirst) setLoading(true);
 
-        const params = new URLSearchParams();
-        UNIVERSE.forEach(sym => params.append('symbols', sym));
+    const params = new URLSearchParams();
+    UNIVERSE.forEach(sym => params.append('symbols', sym));
 
-        const res = await fetch(`${API_BASE_URL}/equities/quotes?${params.toString()}`);
-        if (!res.ok) {
-          throw new Error(`HTTP error ${res.status}`);
-        }
+    const res = await fetch(`${API_BASE_URL}/equities/quotes?${params.toString()}`);
+    if (!res.ok) {
+      throw new Error(`HTTP error ${res.status}`);
+    }
 
-        const json = await res.json();
-        // json.data = { "0": { ...AAPL }, "1": { ...MSFT }, ... }
-        const rows = Object.values(json.data || {});
+    const json = await res.json();
+    const rows = Object.values(json.data || {});
 
-        const stocksArray = rows.map((row, idx) => ({
-          id: idx + 1,
-          symbol: row.symbol || '',
-          name: row.name || row.symbol || '',
-          sector: row.sector || 'Unknown',
-          price: row.last_price || row.bid || row.ask || 0,
-          change:
-            row.last_price && row.prev_close
-              ? row.last_price - row.prev_close
-              : 0,
-          changePercent:
-            row.last_price && row.prev_close
-              ? ((row.last_price - row.prev_close) / row.prev_close) * 100
-              : 0,
-          marketCap: row.market_cap || 0,
-          volume: row.volume || 0,
-          peRatio: row.pe_ratio || null,
-          pbRatio: row.pb_ratio || null,
-          pegRatio: row.peg_ratio || null,
-          dividendYield: row.dividend_yield || null,
-          roe: row.roe || null,
-          roa: row.roa || null,
-          debtToEquity: row.debt_to_equity || null,
-          currentRatio: row.current_ratio || null,
-          quickRatio: row.quick_ratio || null,
-          grossMargin: row.gross_margin || null,
-          operatingMargin: row.operating_margin || null,
-          netMargin: row.net_margin || null,
-          revenueGrowth: row.revenue_growth || null,
-          earningsGrowth: row.earnings_growth || null,
-          rsi: row.rsi || null,
-          beta: row.beta || null,
-          fiftyTwoWeekHigh: row.year_high || null,
-          fiftyTwoWeekLow: row.year_low || null,
-          avgVolume: row.volume_average || null
-        }));
+    const stocksArray = rows.map((row, idx) => ({
+      id: idx + 1,
+      symbol: row.symbol || '',
+      name: row.name || row.symbol || '',
+      sector: row.sector || 'Unknown',
+      price: row.price || 0,
+      change: row.price && row.previous_close
+        ? row.price - row.previous_close
+        : 0,
+      changePercent: row.price && row.previous_close
+        ? ((row.price - row.previous_close) / row.previous_close) * 100
+        : 0,
+      marketCap: row.market_cap || 0,
+      volume: row.volume || 0,
+      peRatio: row.pe_ratio || null,
+      pbRatio: row.pb_ratio || null,
+      pegRatio: row.peg_ratio || null,
+      dividendYield: row.dividend_yield ? row.dividend_yield * 100 : null,
+      roe: row.roe ? row.roe * 100 : null,
+      roa: row.roa ? row.roa * 100 : null,
+      debtToEquity: row.debt_to_equity || null,
+      currentRatio: row.current_ratio || null,
+      quickRatio: null,
+      grossMargin: row.gross_margin ? row.gross_margin * 100 : null,
+      operatingMargin: row.operating_margin ? row.operating_margin * 100 : null,
+      netMargin: row.net_margin ? row.net_margin * 100 : null,
+      revenueGrowth: row.revenue_growth ? row.revenue_growth * 100 : null,
+      earningsGrowth: row.earnings_growth ? row.earnings_growth * 100 : null,
+      rsi: row.rsi || null,
+      beta: row.beta || null,
+      fiftyTwoWeekHigh: row['52_week_high'] || null,
+      fiftyTwoWeekLow: row['52_week_low'] || null,
+      avgVolume: null
+    }));
 
-        setStocks(stocksArray);
-      } catch (err) {
-        console.error('Failed to load market data', err);
-      } finally {
-        if (isFirst) {
-          setLoading(false);
-          isFirst = false;
-        }
-      }
-    };
+    setStocks(stocksArray);
+  } catch (err) {
+    console.error('Failed to load market data', err);
+  } finally {
+    if (isFirst) {
+      setLoading(false);
+      isFirst = false;
+    }
+  }
+};
+
 
     // Initial load
     fetchStocks();
