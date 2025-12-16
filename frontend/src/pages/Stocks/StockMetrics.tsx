@@ -68,7 +68,7 @@ export default function StockMetrics() {
     const json = await res.json();
     const rows = Object.values(json.data || {});
 
-    const stocksArray = rows.map((row, idx) => ({
+  const stocksArray = rows.map((row: any, idx: number) => ({
       id: idx + 1,
       symbol: row.symbol || '',
       name: row.name || row.symbol || '',

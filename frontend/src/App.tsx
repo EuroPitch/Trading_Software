@@ -1,11 +1,10 @@
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
-import Layout from "./components/Layout.jsx";
-import Error404 from "./pages/404.jsx";
-import Portfolio from "./pages/Portfolio/Portfolio.jsx";
-import StockMetrics from "./pages/Stocks/StockMetrics.jsx";
-import Standings from "./pages/Standings/Standings.jsx";
-import Login from "./pages/Auth/Login.jsx";
-import Signup from "./pages/Auth/Signup.jsx";
+import Layout from "./components/Layout";
+import Error404 from "./pages/404";
+import Portfolio from "./pages/Portfolio/Portfolio";
+import StockMetrics from "./pages/Stocks/StockMetrics";
+import Standings from "./pages/Standings/Standings";
+import Login from "./pages/Auth/Login";
 
 function App() {
   return (
@@ -17,7 +16,6 @@ function App() {
           <Route path="/portfolio" element={<Portfolio />} />
           <Route path="/stocks" element={<StockMetrics />} />
           <Route path="/login" element={<Login />} />
-          <Route path="/signup" element={<Signup />} />
 
           {/* 👇 Catch-all 404 lives INSIDE the Layout */}
           <Route path="*" element={<Error404 />} />

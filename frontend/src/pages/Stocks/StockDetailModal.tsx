@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import './StockDetailModal.css';
 
-export default function StockDetailModal({ stock, onClose }) {
+export default function StockDetailModal({ stock, onClose }: any) {
   const [activeTab, setActiveTab] = useState('valuation');
 
-  const formatValue = (value, format) => {
+  const formatValue = (value: any, format: string) => {
     if (value === null || value === undefined) return '-';
     
     switch(format) {
@@ -28,7 +28,7 @@ export default function StockDetailModal({ stock, onClose }) {
     }
   };
 
-  const tabs = {
+  const tabs: any = {
     valuation: [
       { label: 'Market Cap', value: stock.marketCap, format: 'marketCap' },
       { label: 'P/E Ratio', value: stock.peRatio, format: 'decimal' },
@@ -98,7 +98,7 @@ export default function StockDetailModal({ stock, onClose }) {
         </div>
 
         <div className="modal-tabs">
-          {Object.keys(tabs).map(tab => (
+          {Object.keys(tabs).map((tab: string) => (
             <button
               key={tab}
               className={`tab-button ${activeTab === tab ? 'active' : ''}`}
@@ -111,7 +111,7 @@ export default function StockDetailModal({ stock, onClose }) {
 
         <div className="modal-body">
           <div className="metrics-grid">
-            {tabs[activeTab].map((metric, index) => (
+            {tabs[activeTab].map((metric: any, index: number) => (
               <div key={index} className="metric-item">
                 <span className="metric-label">{metric.label}</span>
                 <span className={`metric-value ${metric.colored && metric.value < 0 ? 'negative' : metric.colored && metric.value >= 0 ? 'positive' : ''}`}>

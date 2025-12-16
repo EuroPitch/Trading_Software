@@ -8,12 +8,12 @@ export default function Login() {
     email: '',
     password: ''
   });
-  const [errors, setErrors] = useState({});
+  const [errors, setErrors] = useState({} as any);
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
   const validateForm = () => {
-    const newErrors = {};
+    const newErrors: any = {};
 
     // Email validation
     if (!formData.email) {
@@ -33,14 +33,14 @@ export default function Login() {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleChange = (e) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
       [name]: value
     }));
     // Clear error when user starts typing
-    if (errors[name]) {
+    if ((errors as any)[name]) {
       setErrors(prev => ({
         ...prev,
         [name]: ''
@@ -48,7 +48,7 @@ export default function Login() {
     }
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!validateForm()) {
@@ -56,12 +56,6 @@ export default function Login() {
     }
 
     setLoading(true);
-
-    // Mock authentication - Replace with Supabase later
-    // const { data, error } = await supabase.auth.signInWithPassword({
-    //   email: formData.email,
-    //   password: formData.password,
-    // });
 
     setTimeout(() => {
       setLoading(false);
@@ -102,12 +96,12 @@ export default function Login() {
                 name="email"
                 value={formData.email}
                 onChange={handleChange}
-                className={errors.email ? 'error' : ''}
+                className={(errors as any).email ? 'error' : ''}
                 placeholder="you@example.com"
                 autoComplete="email"
               />
-              {errors.email && (
-                <span className="error-message">{errors.email}</span>
+              {(errors as any).email && (
+                <span className="error-message">{(errors as any).email}</span>
               )}
             </div>
 
@@ -125,7 +119,7 @@ export default function Login() {
                   name="password"
                   value={formData.password}
                   onChange={handleChange}
-                  className={errors.password ? 'error' : ''}
+                  className={(errors as any).password ? 'error' : ''}
                   placeholder="Enter your password"
                   autoComplete="current-password"
                 />
@@ -138,8 +132,8 @@ export default function Login() {
                   {showPassword ? '👁️' : '👁️‍🗨️'}
                 </button>
               </div>
-              {errors.password && (
-                <span className="error-message">{errors.password}</span>
+              {(errors as any).password && (
+                <span className="error-message">{(errors as any).password}</span>
               )}
             </div>
 
@@ -193,13 +187,7 @@ export default function Login() {
             </button>
           </div>
 
-          <div className="auth-footer">
-            <p>
-              Don't have an account?{' '}
-              <Link to="/signup" className="auth-link">Sign up</Link>
-            </p>
           </div>
-        </div>
 
         <div className="auth-sidebar">
           <div className="sidebar-content">

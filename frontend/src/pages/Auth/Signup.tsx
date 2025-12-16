@@ -11,23 +11,15 @@ export default function Signup() {
     country: '',
     password: '',
     confirmPassword: '',
-    participants: [
-      { firstName: '', lastName: '', email: '' },
-      { firstName: '', lastName: '', email: '' },
-      { firstName: '', lastName: '', email: '' },
-      { firstName: '', lastName: '', email: '' },
-      { firstName: '', lastName: '', email: '' },
-      { firstName: '', lastName: '', email: '' }
-    ],
+    participants: Array.from({ length: 6 }, () => ({ firstName: '', lastName: '', email: '' })),
     captainIndex: 0
-  });
-  const [errors, setErrors] = useState({});
+  } as any);
+  const [errors, setErrors] = useState({} as any);
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
 
-  // All European countries (continent of Europe)
   const europeanCountries = [
     'Albania', 'Andorra', 'Austria', 'Belarus', 'Belgium', 'Bosnia and Herzegovina',
     'Bulgaria', 'Croatia', 'Cyprus', 'Czech Republic', 'Denmark', 'Estonia',
@@ -40,7 +32,7 @@ export default function Signup() {
   ];
 
   const validateStep1 = () => {
-    const newErrors = {};
+    const newErrors: any = {};
 
     if (!formData.societyName.trim()) {
       newErrors.societyName = 'Society name is required';
@@ -77,91 +69,49 @@ export default function Signup() {
   };
 
   const validateStep2 = () => {
-    const newErrors = {};
+    const newErrors: any = {};
 
-    // Validate first 4 participants (mandatory)
     for (let i = 0; i < 4; i++) {
       const participant = formData.participants[i];
-      
-      if (!participant.firstName.trim()) {
-        newErrors[`participant${i}FirstName`] = 'First name is required';
-      }
-      
-      if (!participant.lastName.trim()) {
-        newErrors[`participant${i}LastName`] = 'Last name is required';
-      }
-      
-      if (!participant.email) {
-        newErrors[`participant${i}Email`] = 'Email is required';
-      } else if (!/^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i.test(participant.email)) {
-        newErrors[`participant${i}Email`] = 'Invalid email address';
-      }
+      if (!participant.firstName.trim()) newErrors[`participant${i}FirstName`] = 'First name is required';
+      if (!participant.lastName.trim()) newErrors[`participant${i}LastName`] = 'Last name is required';
+      if (!participant.email) newErrors[`participant${i}Email`] = 'Email is required';
+      else if (!/^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i.test(participant.email)) newErrors[`participant${i}Email`] = 'Invalid email address';
     }
 
-    // Validate optional participants (5 & 6) - only if any field is filled
     for (let i = 4; i < 6; i++) {
       const participant = formData.participants[i];
       const hasAnyField = participant.firstName || participant.lastName || participant.email;
-      
       if (hasAnyField) {
-        if (!participant.firstName.trim()) {
-          newErrors[`participant${i}FirstName`] = 'First name is required if adding participant';
-        }
-        if (!participant.lastName.trim()) {
-          newErrors[`participant${i}LastName`] = 'Last name is required if adding participant';
-        }
-        if (!participant.email) {
-          newErrors[`participant${i}Email`] = 'Email is required if adding participant';
-        } else if (!/^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i.test(participant.email)) {
-          newErrors[`participant${i}Email`] = 'Invalid email address';
-        }
+        if (!participant.firstName.trim()) newErrors[`participant${i}FirstName`] = 'First name is required if adding participant';
+        if (!participant.lastName.trim()) newErrors[`participant${i}LastName`] = 'Last name is required if adding participant';
+        if (!participant.email) newErrors[`participant${i}Email`] = 'Email is required if adding participant';
+        else if (!/^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i.test(participant.email)) newErrors[`participant${i}Email`] = 'Invalid email address';
       }
     }
 
-    // Check for duplicate emails
-    const emails = formData.participants
-      .filter(p => p.email)
-      .map(p => p.email.toLowerCase());
-    const duplicates = emails.filter((email, index) => emails.indexOf(email) !== index);
-    
-    if (duplicates.length > 0) {
-      newErrors.duplicateEmails = 'Each participant must have a unique email address';
-    }
+    const emails = formData.participants.filter((p: any) => p.email).map((p: any) => p.email.toLowerCase());
+    const duplicates = emails.filter((email: string, index: number) => emails.indexOf(email) !== index);
+    if (duplicates.length > 0) newErrors.duplicateEmails = 'Each participant must have a unique email address';
 
-    if (!agreedToTerms) {
-      newErrors.terms = 'You must agree to the terms and conditions';
-    }
+    if (!agreedToTerms) newErrors.terms = 'You must agree to the terms and conditions';
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
-    if (errors[name]) {
-      setErrors(prev => ({ ...prev, [name]: '' }));
-    }
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = e.target as HTMLInputElement;
+    setFormData(prev => ({ ...prev, [name]: value }));
+    if ((errors as any)[name]) setErrors(prev => ({ ...prev, [name]: '' }));
   };
 
-  const handleParticipantChange = (index, field, value) => {
+  const handleParticipantChange = (index: number, field: string, value: string) => {
     const newParticipants = [...formData.participants];
-    newParticipants[index] = {
-      ...newParticipants[index],
-      [field]: value
-    };
-    setFormData(prev => ({
-      ...prev,
-      participants: newParticipants
-    }));
-    
+    newParticipants[index] = { ...newParticipants[index], [field]: value };
+    setFormData(prev => ({ ...prev, participants: newParticipants }));
     const errorKey = `participant${index}${field.charAt(0).toUpperCase() + field.slice(1)}`;
-    if (errors[errorKey]) {
-      setErrors(prev => ({ ...prev, [errorKey]: '', duplicateEmails: '' }));
-    }
+    if ((errors as any)[errorKey]) setErrors(prev => ({ ...prev, [errorKey]: '', duplicateEmails: '' }));
   };
 
   const handleNextStep = () => {
@@ -176,38 +126,13 @@ export default function Signup() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!validateStep2()) {
-      return;
-    }
-
+    if (!validateStep2()) return;
     setLoading(true);
 
-    // Filter out empty optional participants
-    const filledParticipants = formData.participants.filter((p, i) => 
-      i < 4 || (p.firstName && p.lastName && p.email)
-    );
-
-    const registrationData = {
-      ...formData,
-      participants: filledParticipants
-    };
-
-    // Mock registration - Replace with Supabase later
-    // const { data, error } = await supabase.auth.signUp({
-    //   email: formData.societyEmail,
-    //   password: formData.password,
-    //   options: {
-    //     data: {
-    //       society_name: formData.societyName,
-    //       country: formData.country,
-    //       participants: filledParticipants,
-    //       captain_index: formData.captainIndex
-    //     }
-    //   }
-    // });
+    const filledParticipants = formData.participants.filter((p: any, i: number) => i < 4 || (p.firstName && p.lastName && p.email));
+    const registrationData = { ...formData, participants: filledParticipants };
 
     setTimeout(() => {
       setLoading(false);
@@ -222,17 +147,14 @@ export default function Signup() {
   const getPasswordStrength = () => {
     const password = formData.password;
     if (!password) return { strength: 0, label: '', color: '' };
-    
     let strength = 0;
     if (password.length >= 8) strength++;
     if (password.length >= 12) strength++;
     if (/[a-z]/.test(password) && /[A-Z]/.test(password)) strength++;
     if (/[0-9]/.test(password)) strength++;
     if (/[^a-zA-Z0-9]/.test(password)) strength++;
-
     const labels = ['', 'Weak', 'Fair', 'Good', 'Strong', 'Very Strong'];
     const colors = ['', '#dc2626', '#f59e0b', '#3b82f6', '#059669', '#059669'];
-    
     return { strength, label: labels[strength], color: colors[strength] };
   };
 
@@ -249,8 +171,6 @@ export default function Signup() {
             </div>
             <h2>Register Your Society</h2>
             <p>Compete as a team in the European Portfolio Challenge</p>
-            
-            {/* Progress Indicator */}
             <div className="progress-indicator">
               <div className={`progress-step ${step >= 1 ? 'active' : ''} ${step > 1 ? 'completed' : ''}`}>
                 <div className="step-number">1</div>
@@ -264,7 +184,6 @@ export default function Signup() {
             </div>
           </div>
 
-          {/* Step 1: Society Information */}
           {step === 1 && (
             <form className="auth-form">
               <div className="form-group">
@@ -275,12 +194,12 @@ export default function Signup() {
                   name="societyName"
                   value={formData.societyName}
                   onChange={handleChange}
-                  className={errors.societyName ? 'error' : ''}
+                  className={(errors as any).societyName ? 'error' : ''}
                   placeholder="Investment Society Name"
                   autoComplete="organization"
                 />
-                {errors.societyName && (
-                  <span className="error-message">{errors.societyName}</span>
+                {(errors as any).societyName && (
+                  <span className="error-message">{(errors as any).societyName}</span>
                 )}
               </div>
 
@@ -292,12 +211,12 @@ export default function Signup() {
                   name="societyEmail"
                   value={formData.societyEmail}
                   onChange={handleChange}
-                  className={errors.societyEmail ? 'error' : ''}
+                  className={(errors as any).societyEmail ? 'error' : ''}
                   placeholder="society@university.edu"
                   autoComplete="email"
                 />
-                {errors.societyEmail && (
-                  <span className="error-message">{errors.societyEmail}</span>
+                {(errors as any).societyEmail && (
+                  <span className="error-message">{(errors as any).societyEmail}</span>
                 )}
                 <p className="field-hint">This email will be used for official communications</p>
               </div>
@@ -309,15 +228,15 @@ export default function Signup() {
                   name="country"
                   value={formData.country}
                   onChange={handleChange}
-                  className={errors.country ? 'error' : ''}
+                  className={(errors as any).country ? 'error' : ''}
                 >
                   <option value="">Select your country</option>
                   {europeanCountries.map(country => (
                     <option key={country} value={country}>{country}</option>
                   ))}
                 </select>
-                {errors.country && (
-                  <span className="error-message">{errors.country}</span>
+                {(errors as any).country && (
+                  <span className="error-message">{(errors as any).country}</span>
                 )}
                 <p className="field-hint">Only European countries are eligible</p>
               </div>
@@ -331,7 +250,7 @@ export default function Signup() {
                     name="password"
                     value={formData.password}
                     onChange={handleChange}
-                    className={errors.password ? 'error' : ''}
+                    className={(errors as any).password ? 'error' : ''}
                     placeholder="Create a strong password"
                     autoComplete="new-password"
                   />
@@ -360,8 +279,8 @@ export default function Signup() {
                     </span>
                   </div>
                 )}
-                {errors.password && (
-                  <span className="error-message">{errors.password}</span>
+                {(errors as any).password && (
+                  <span className="error-message">{(errors as any).password}</span>
                 )}
               </div>
 
@@ -374,7 +293,7 @@ export default function Signup() {
                     name="confirmPassword"
                     value={formData.confirmPassword}
                     onChange={handleChange}
-                    className={errors.confirmPassword ? 'error' : ''}
+                    className={(errors as any).confirmPassword ? 'error' : ''}
                     placeholder="Re-enter your password"
                     autoComplete="new-password"
                   />
@@ -387,8 +306,8 @@ export default function Signup() {
                     {showConfirmPassword ? '👁️' : '👁️‍🗨️'}
                   </button>
                 </div>
-                {errors.confirmPassword && (
-                  <span className="error-message">{errors.confirmPassword}</span>
+                {(errors as any).confirmPassword && (
+                  <span className="error-message">{(errors as any).confirmPassword}</span>
                 )}
               </div>
 
@@ -409,7 +328,6 @@ export default function Signup() {
             </form>
           )}
 
-          {/* Step 2: Team Members */}
           {step === 2 && (
             <form onSubmit={handleSubmit} className="auth-form">
               <div className="team-section">
@@ -418,11 +336,11 @@ export default function Signup() {
                   Enter details for your team members. First 4 are required, last 2 are optional.
                 </p>
 
-                {errors.duplicateEmails && (
-                  <div className="error-banner">{errors.duplicateEmails}</div>
+                {(errors as any).duplicateEmails && (
+                  <div className="error-banner">{(errors as any).duplicateEmails}</div>
                 )}
 
-                {formData.participants.map((participant, index) => (
+                {formData.participants.map((participant: any, index: number) => (
                   <div key={index} className="participant-card">
                     <div className="participant-header">
                       <h4>
@@ -435,7 +353,7 @@ export default function Signup() {
                           type="radio"
                           name="captain"
                           checked={formData.captainIndex === index}
-                          onChange={() => setFormData(prev => ({ ...prev, captainIndex: index }))}
+                          onChange={() => setFormData((prev: any) => ({ ...prev, captainIndex: index }))}
                           disabled={index >= 4 && !participant.firstName && !participant.lastName}
                         />
                         <span>Captain</span>
@@ -452,11 +370,11 @@ export default function Signup() {
                           id={`firstName${index}`}
                           value={participant.firstName}
                           onChange={(e) => handleParticipantChange(index, 'firstName', e.target.value)}
-                          className={errors[`participant${index}FirstName`] ? 'error' : ''}
+                          className={(errors as any)[`participant${index}FirstName`] ? 'error' : ''}
                           placeholder="First name"
                         />
-                        {errors[`participant${index}FirstName`] && (
-                          <span className="error-message">{errors[`participant${index}FirstName`]}</span>
+                        {(errors as any)[`participant${index}FirstName`] && (
+                          <span className="error-message">{(errors as any)[`participant${index}FirstName`]}</span>
                         )}
                       </div>
 
@@ -469,11 +387,11 @@ export default function Signup() {
                           id={`lastName${index}`}
                           value={participant.lastName}
                           onChange={(e) => handleParticipantChange(index, 'lastName', e.target.value)}
-                          className={errors[`participant${index}LastName`] ? 'error' : ''}
+                          className={(errors as any)[`participant${index}LastName`] ? 'error' : ''}
                           placeholder="Last name"
                         />
-                        {errors[`participant${index}LastName`] && (
-                          <span className="error-message">{errors[`participant${index}LastName`]}</span>
+                        {(errors as any)[`participant${index}LastName`] && (
+                          <span className="error-message">{(errors as any)[`participant${index}LastName`]}</span>
                         )}
                       </div>
                     </div>
@@ -487,11 +405,11 @@ export default function Signup() {
                         id={`email${index}`}
                         value={participant.email}
                         onChange={(e) => handleParticipantChange(index, 'email', e.target.value)}
-                        className={errors[`participant${index}Email`] ? 'error' : ''}
+                        className={(errors as any)[`participant${index}Email`] ? 'error' : ''}
                         placeholder="participant@email.com"
                       />
-                      {errors[`participant${index}Email`] && (
-                        <span className="error-message">{errors[`participant${index}Email`]}</span>
+                      {(errors as any)[`participant${index}Email`] && (
+                        <span className="error-message">{(errors as any)[`participant${index}Email`]}</span>
                       )}
                     </div>
                   </div>
@@ -505,9 +423,7 @@ export default function Signup() {
                     checked={agreedToTerms}
                     onChange={(e) => {
                       setAgreedToTerms(e.target.checked);
-                      if (errors.terms) {
-                        setErrors(prev => ({ ...prev, terms: '' }));
-                      }
+                      if ((errors as any).terms) setErrors((prev: any) => ({ ...prev, terms: '' }));
                     }}
                   />
                   <span>
@@ -517,8 +433,8 @@ export default function Signup() {
                     <Link to="/privacy" className="inline-link">Privacy Policy</Link>
                   </span>
                 </label>
-                {errors.terms && (
-                  <span className="error-message">{errors.terms}</span>
+                {(errors as any).terms && (
+                  <span className="error-message">{(errors as any).terms}</span>
                 )}
               </div>
 
