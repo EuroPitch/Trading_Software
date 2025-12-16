@@ -32,8 +32,12 @@ def get_quotes_for_universe(
         for symbol in batch:
             try:
                 ticker = yf.Ticker(symbol)
-                info = ticker.info
+                
+                # Use fast_info for real-time price data (more reliable)
                 fast_info = ticker.fast_info
+                
+                # Use info only for fundamentals (slower but necessary)
+                info = ticker.info
                 
                 # Get historical data for RSI calculation
                 hist = ticker.history(period="1mo")
@@ -43,15 +47,16 @@ def get_quotes_for_universe(
                     "symbol": symbol,
                     "name": info.get("longName") or info.get("shortName") or symbol,
                     "sector": info.get("sector"),
-                    "price": fast_info.get("last_price"),
-                    "previous_close": fast_info.get("previous_close"),
-                    "open": fast_info.get("open"),
-                    "day_high": fast_info.get("day_high"),
-                    "day_low": fast_info.get("day_low"),
-                    "volume": fast_info.get("last_volume"),
-                    "market_cap": fast_info.get("market_cap"),
-                    "52_week_high": fast_info.get("year_high"),
-                    "52_week_low": fast_info.get("year_low"),
+                    # Prioritize fast_info for current data
+                    "price": fast_info.get("last_price") or info.get("currentPrice"),
+                    "previous_close": fast_info.get("previous_close") or info.get("previousClose"),
+                    "open": fast_info.get("open") or info.get("regularMarketOpen"),
+                    "day_high": fast_info.get("day_high") or info.get("dayHigh"),
+                    "day_low": fast_info.get("day_low") or info.get("dayLow"),
+                    "volume": fast_info.get("last_volume") or info.get("volume"),
+                    "market_cap": fast_info.get("market_cap") or info.get("marketCap"),
+                    "52_week_high": fast_info.get("year_high") or info.get("fiftyTwoWeekHigh"),
+                    "52_week_low": fast_info.get("year_low") or info.get("fiftyTwoWeekLow"),
                     # Fundamentals from info
                     "pe_ratio": info.get("trailingPE"),
                     "pb_ratio": info.get("priceToBook"),
