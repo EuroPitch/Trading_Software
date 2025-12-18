@@ -348,8 +348,25 @@
 
 .standings-table td {
   padding: 16px;
-  color: var(--text);
+  /* Force table text to be dark on the white table background so stats remain legible
+     (some podium styles set color:white within their cards which could cascade in
+     specific layouts). We scope color to the table to avoid changing podium text. */
+  color: #111827;
   white-space: nowrap;
+}
+
+/* Table-specific value styles (scoped) to avoid collisions with podium stat classes */
+.standings-table .stat-value {
+  color: #111827;
+  font-weight: 600;
+}
+.standings-table .positive {
+  color: #059669;
+  font-weight: 600;
+}
+.standings-table .negative {
+  color: #dc2626;
+  font-weight: 600;
 }
 
 .align-right {
