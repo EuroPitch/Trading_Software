@@ -213,6 +213,49 @@
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
+/* Sector grouping */
+.sector-group {
+  border-top: 1px solid rgba(255,255,255,0.04);
+}
+
+.sector-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
+  background: linear-gradient(90deg, rgba(255,255,255,0.02), rgba(255,255,255,0.00));
+  border-bottom: 1px solid rgba(0,0,0,0.04);
+}
+
+.sector-title {
+  font-size: 15px;
+  font-weight: 700;
+  margin: 0;
+  color: var(--text);
+}
+
+.sector-toggle {
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  border: none;
+  background: rgba(0,0,0,0.04);
+  color: var(--muted);
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sector-toggle:hover {
+  background: rgba(0,0,0,0.06);
+}
+
+.sector-group table.metrics-table {
+  margin: 0;
+}
+
 .metrics-table {
   width: 100%;
   border-collapse: collapse;

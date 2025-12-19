@@ -3,10 +3,14 @@ import StockDetailModal from "./StockDetailModal";
 import ComparisonPanel from "./ComparisonPanel";
 import "./StockMetrics.css";
 
-const UNIVERSE = ["AAPL", "MSFT", "JPM", "JNJ", "TSLA"]; // extend this for your competition
+// The component will load a tickers list from the public folder (public/nyse_tickers.json)
+// This file should contain an array of symbols (e.g. ["AAPL","MSFT",...]) and can
+// be replaced with a full list of NYSE symbols when you have it. Loading from the
+// public folder makes it easy to swap out without rebuilding the app.
 
 export default function StockMetrics() {
   const [stocks, setStocks] = useState([]);
+  const [tickers, setTickers] = useState<string[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [sortConfig, setSortConfig] = useState({
     key: "marketCap",
@@ -32,6 +36,8 @@ export default function StockMetrics() {
   const [loading, setLoading] = useState(true);
 
   const API_BASE_URL = "https://europitch-trading-prices.vercel.app"; // change if needed
+  // Chunk size for backend requests to avoid very long query strings
+  const FETCH_CHUNK_SIZE = 50;
 
   const allColumns = [
     { key: "symbol", label: "Symbol", format: "text" },
@@ -61,27 +67,72 @@ export default function StockMetrics() {
 
   // Fetch on mount + background refresh every 5s without UI flicker
   useEffect(() => {
+    // Behavior:
+    // 1) Load tickers list from public/nyse_tickers.json (if available).
+    // 2) Batch requests to the backend in chunks, merge results.
+    // 3) Keep a short background refresh without UI flicker.
+
     let isFirst = true;
-    let intervalId;
+    let intervalId: any;
+
+    const loadTickersFile = async () => {
+      try {
+        // public/nyse_tickers.json should be placed in the app's public folder
+        const res = await fetch("/nyse_tickers.json");
+        if (!res.ok) return [];
+        const json = await res.json();
+        if (Array.isArray(json)) return json as string[];
+        // If the file is an object mapping name->symbol, extract values
+        if (typeof json === "object" && json !== null)
+          return Object.values(json) as string[];
+        return [];
+      } catch (e) {
+        console.warn("Could not load /nyse_tickers.json", e);
+        return [];
+      }
+    };
 
     const fetchStocks = async () => {
       try {
         if (isFirst) setLoading(true);
 
-        const params = new URLSearchParams();
-        UNIVERSE.forEach((sym) => params.append("symbols", sym));
-
-        const res = await fetch(
-          `${API_BASE_URL}/equities/quotes?${params.toString()}`
-        );
-        if (!res.ok) {
-          throw new Error(`HTTP error ${res.status}`);
+        // If we don't have a tickers list yet, attempt to load it
+        let symbols = tickers;
+        if (!symbols || symbols.length === 0) {
+          symbols = await loadTickersFile();
+          // fallback: if no file found, use a small default sample
+          if (!symbols || symbols.length === 0) {
+            symbols = ["AAPL", "MSFT", "JPM", "JNJ", "TSLA"];
+          }
+          setTickers(symbols);
         }
 
-        const json = await res.json();
-        const rows = Object.values(json.data || {});
+        // Batch the requests into chunks to avoid extremely long URLs
+        const chunks: string[][] = [];
+        for (let i = 0; i < symbols.length; i += FETCH_CHUNK_SIZE) {
+          chunks.push(symbols.slice(i, i + FETCH_CHUNK_SIZE));
+        }
 
-        const stocksArray = rows.map((row: any, idx: number) => ({
+        const results: any[] = [];
+
+        for (const chunk of chunks) {
+          const params = new URLSearchParams();
+          chunk.forEach((sym) => params.append("symbols", sym));
+          params.append("chunk_size", String(FETCH_CHUNK_SIZE));
+
+          const res = await fetch(
+            `${API_BASE_URL}/equities/quotes?${params.toString()}`
+          );
+          if (!res.ok) {
+            console.warn("Chunk fetch failed", res.status);
+            continue;
+          }
+          const json = await res.json();
+          const data = Object.values(json.data || {});
+          results.push(...data);
+        }
+
+        const stocksArray = results.map((row: any, idx: number) => ({
           id: idx + 1,
           symbol: row.symbol || "",
           name: row.name || row.symbol || "",
@@ -135,8 +186,8 @@ export default function StockMetrics() {
 
     // Initial load
     fetchStocks();
-    // Background refresh every 5 seconds
-    intervalId = setInterval(fetchStocks, 5000);
+    // Background refresh every 10 seconds (less aggressive when loading many symbols)
+    intervalId = setInterval(fetchStocks, 10000);
 
     return () => {
       clearInterval(intervalId);
@@ -144,6 +195,15 @@ export default function StockMetrics() {
   }, [API_BASE_URL]);
 
   const sectors = ["all", ...new Set(stocks.map((s) => s.sector))];
+
+  // Track collapsed state for each sector (true -> collapsed)
+  const [collapsedSectors, setCollapsedSectors] = useState<
+    Record<string, boolean>
+  >({});
+
+  const toggleSectorCollapse = (sector: string) => {
+    setCollapsedSectors((prev) => ({ ...prev, [sector]: !prev[sector] }));
+  };
 
   const filteredAndSortedStocks = useMemo(() => {
     let filtered = stocks.filter((stock) => {
@@ -170,6 +230,17 @@ export default function StockMetrics() {
 
     return filtered;
   }, [stocks, searchTerm, sectorFilter, sortConfig]);
+
+  // Group filtered stocks by sector for display (must be a hook call before any early returns)
+  const groupedBySector = useMemo(() => {
+    const groups: Record<string, any[]> = {};
+    filteredAndSortedStocks.forEach((s) => {
+      const sec = s.sector || "Unknown";
+      if (!groups[sec]) groups[sec] = [];
+      groups[sec].push(s);
+    });
+    return groups;
+  }, [filteredAndSortedStocks]);
 
   const requestSort = (key) => {
     let direction = "asc";
@@ -373,87 +444,105 @@ export default function StockMetrics() {
       </div>
 
       <div className="metrics-table-wrapper">
-        <table className="metrics-table">
-          <thead>
-            <tr>
-              {compareMode && <th className="compare-col">Compare</th>}
-              {allColumns
-                .filter((col) => visibleColumns.includes(col.key))
-                .map((column) => (
-                  <th
-                    key={column.key}
-                    onClick={() => requestSort(column.key)}
-                    className={`sortable ${
-                      sortConfig.key === column.key ? "active" : ""
-                    }`}
-                  >
-                    <div className="th-content">
-                      {column.label}
-                      <span className="sort-indicator">
-                        {sortConfig.key === column.key &&
-                          (sortConfig.direction === "asc" ? "↑" : "↓")}
-                      </span>
-                    </div>
-                  </th>
-                ))}
-              <th className="action-col">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredAndSortedStocks.map((stock) => (
-              <tr key={stock.id} className="stock-row">
-                {compareMode && (
-                  <td className="compare-col">
-                    <input
-                      type="checkbox"
-                      checked={selectedForCompare.includes(stock.id)}
-                      onChange={() => handleCompareToggle(stock.id)}
-                      disabled={
-                        !selectedForCompare.includes(stock.id) &&
-                        selectedForCompare.length >= 5
-                      }
-                    />
-                  </td>
-                )}
-                {allColumns
-                  .filter((col) => visibleColumns.includes(col.key))
-                  .map((column) => (
-                    <td
-                      key={column.key}
-                      className={`${column.key}-cell ${getCellClassName(
-                        column.key,
-                        stock[column.key]
-                      )}`}
-                    >
-                      {column.key === "symbol" ? (
-                        <strong>{stock[column.key]}</strong>
-                      ) : column.key === "name" ? (
-                        <span className="company-name">
-                          {stock[column.key]}
-                        </span>
-                      ) : (
-                        formatValue(stock[column.key], column.format)
-                      )}
-                    </td>
-                  ))}
-                <td className="action-col">
-                  <button
-                    className="btn-details"
-                    onClick={() => setSelectedStock(stock)}
-                  >
-                    Details
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-
-        {filteredAndSortedStocks.length === 0 && (
+        {Object.keys(groupedBySector).length === 0 && (
           <div className="empty-state">
             <p>No stocks match your search criteria.</p>
           </div>
         )}
+
+        {Object.entries(groupedBySector).map(([sector, sectorStocks]) => (
+          <div key={sector} className="sector-group">
+            <div className="sector-header">
+              <button
+                className="sector-toggle"
+                onClick={() => toggleSectorCollapse(sector)}
+              >
+                {collapsedSectors[sector] ? "+" : "−"}
+              </button>
+              <h2 className="sector-title">
+                {sector} ({sectorStocks.length})
+              </h2>
+            </div>
+
+            {!collapsedSectors[sector] && (
+              <table className="metrics-table">
+                <thead>
+                  <tr>
+                    {compareMode && <th className="compare-col">Compare</th>}
+                    {allColumns
+                      .filter((col) => visibleColumns.includes(col.key))
+                      .map((column) => (
+                        <th
+                          key={column.key}
+                          onClick={() => requestSort(column.key)}
+                          className={`sortable ${
+                            sortConfig.key === column.key ? "active" : ""
+                          }`}
+                        >
+                          <div className="th-content">
+                            {column.label}
+                            <span className="sort-indicator">
+                              {sortConfig.key === column.key &&
+                                (sortConfig.direction === "asc" ? "↑" : "↓")}
+                            </span>
+                          </div>
+                        </th>
+                      ))}
+                    <th className="action-col">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sectorStocks.map((stock) => (
+                    <tr key={stock.id} className="stock-row">
+                      {compareMode && (
+                        <td className="compare-col">
+                          <input
+                            type="checkbox"
+                            checked={selectedForCompare.includes(stock.id)}
+                            onChange={() => handleCompareToggle(stock.id)}
+                            disabled={
+                              !selectedForCompare.includes(stock.id) &&
+                              selectedForCompare.length >= 5
+                            }
+                          />
+                        </td>
+                      )}
+                      {allColumns
+                        .filter((col) => visibleColumns.includes(col.key))
+                        .map((column) => (
+                          <td
+                            key={column.key}
+                            className={`${column.key}-cell ${getCellClassName(
+                              column.key,
+                              stock[column.key]
+                            )}`}
+                          >
+                            {column.key === "symbol" ? (
+                              <strong>{stock[column.key]}</strong>
+                            ) : column.key === "name" ? (
+                              <span className="company-name">
+                                {stock[column.key]}
+                              </span>
+                            ) : (
+                              formatValue(stock[column.key], column.format)
+                            )}
+                          </td>
+                        ))}
+                      <td className="action-col">
+                        <button
+                          className="btn-details"
+                          onClick={() => setSelectedStock(stock)}
+                        >
+                          Details
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        ))}
       </div>
 
       {compareMode && selectedForCompare.length > 0 && (
