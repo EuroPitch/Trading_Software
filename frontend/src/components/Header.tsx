@@ -1,13 +1,14 @@
+// src/components/Header.tsx
 import { NavLink } from "react-router-dom";
 import { useState } from "react";
 import logo from "../assets/EuroPitch_logo.png";
+import { useAuth } from "../context/AuthContext";
 
 const Header = () => {
   const [menuOpen, setMenuOpen] = useState(false);
+  const { session, loading } = useAuth();
 
-  const isAuthenticated =
-    typeof window !== "undefined" &&
-    localStorage.getItem("isAuthenticated") === "true";
+  const isAuthenticated = !!session && !loading;
 
   const navItems = [
     { path: "/portfolio", label: "Portfolio" },
