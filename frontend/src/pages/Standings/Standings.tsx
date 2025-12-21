@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from "react";
 import "./Standings.css";
+import { supabase } from "../../supabaseClient";
 
 type Standing = {
-  id: number;
   rank: number;
-  username: string;
   displayName: string;
   portfolioValue: number;
   totalReturn: number;
@@ -14,6 +13,8 @@ type Standing = {
   bestTrade: number;
   lastActive: string;
   joinDate?: string;
+  // internal id kept for matching/highlighting but must NOT be rendered
+  id?: number | string;
 };
 
 export default function Standings() {
@@ -22,183 +23,111 @@ export default function Standings() {
   const [loading, setLoading] = useState<boolean>(true);
   const currentUserId: number | null = 3; // This would come from your auth context later
 
-  // Mock data - replace with Supabase query later
+  // Fetch live standings from Supabase `profiles` table and rank by `realized_pnl`.
   useEffect(() => {
-    setTimeout(() => {
-      const mockStandings: Standing[] = [
-        {
-          id: 1,
-          rank: 1,
-          username: "ASTRA",
-          displayName: "Astra Investment Collective",
-          portfolioValue: 1_245_680.5,
-          totalReturn: 245680.5,
-          returnPercent: 24.57,
-          winRate: 68.5,
-          totalTrades: 147,
-          bestTrade: 45230.0,
-          lastActive: "2025-12-16T14:30:00",
-          joinDate: "2025-01-15",
-        },
-        {
-          id: 2,
-          rank: 2,
-          username: "NOVA",
-          displayName: "Nova Capital Society",
-          portfolioValue: 1_120_340.0,
-          totalReturn: 220340.0,
-          returnPercent: 24.45,
-          winRate: 66.2,
-          totalTrades: 132,
-          bestTrade: 40210.0,
-          lastActive: "2025-12-15T11:20:00",
-          joinDate: "2025-02-03",
-        },
-        {
-          id: 3,
-          rank: 3,
-          username: "EURONOMICS",
-          displayName: "Euronomics Club",
-          portfolioValue: 980_500.75,
-          totalReturn: 180500.75,
-          returnPercent: 22.5,
-          winRate: 64.1,
-          totalTrades: 158,
-          bestTrade: 37800.0,
-          lastActive: "2025-12-14T09:10:00",
-          joinDate: "2025-01-10",
-        },
-        {
-          id: 4,
-          rank: 4,
-          username: "VANGUARDU",
-          displayName: "Vanguard U",
-          portfolioValue: 870_200.0,
-          totalReturn: 152200.0,
-          returnPercent: 21.2,
-          winRate: 61.7,
-          totalTrades: 120,
-          bestTrade: 24000.0,
-          lastActive: "2025-12-13T17:05:00",
-          joinDate: "2025-03-01",
-        },
-        {
-          id: 5,
-          rank: 5,
-          username: "ALPHA",
-          displayName: "Alpha Traders Society",
-          portfolioValue: 765_430.25,
-          totalReturn: 120430.25,
-          returnPercent: 18.6,
-          winRate: 59.0,
-          totalTrades: 98,
-          bestTrade: 19850.0,
-          lastActive: "2025-12-12T12:00:00",
-          joinDate: "2025-02-20",
-        },
-        {
-          id: 6,
-          rank: 6,
-          username: "DELTA",
-          displayName: "Delta Investment Club",
-          portfolioValue: 690_120.0,
-          totalReturn: 90120.0,
-          returnPercent: 15.0,
-          winRate: 56.3,
-          totalTrades: 110,
-          bestTrade: 15500.0,
-          lastActive: "2025-12-11T08:45:00",
-          joinDate: "2025-01-22",
-        },
-        {
-          id: 7,
-          rank: 7,
-          username: "BETA",
-          displayName: "Beta Financials",
-          portfolioValue: 612_300.0,
-          totalReturn: 62300.0,
-          returnPercent: 11.3,
-          winRate: 54.0,
-          totalTrades: 85,
-          bestTrade: 9400.0,
-          lastActive: "2025-12-10T20:15:00",
-          joinDate: "2025-03-10",
-        },
-        {
-          id: 8,
-          rank: 8,
-          username: "SIGMA",
-          displayName: "Sigma Markets",
-          portfolioValue: 540_000.0,
-          totalReturn: 40000.0,
-          returnPercent: 8.0,
-          winRate: 51.5,
-          totalTrades: 76,
-          bestTrade: 7200.0,
-          lastActive: "2025-12-09T13:25:00",
-          joinDate: "2025-02-05",
-        },
-        {
-          id: 9,
-          rank: 9,
-          username: "OMEGA",
-          displayName: "Omega Capital",
-          portfolioValue: 470_850.9,
-          totalReturn: 30850.9,
-          returnPercent: 7.0,
-          winRate: 49.8,
-          totalTrades: 60,
-          bestTrade: 6200.0,
-          lastActive: "2025-12-08T16:40:00",
-          joinDate: "2025-01-30",
-        },
-        {
-          id: 10,
-          rank: 10,
-          username: "ZEUS",
-          displayName: "Zeus Investment Group",
-          portfolioValue: 415_200.0,
-          totalReturn: 15200.0,
-          returnPercent: 3.8,
-          winRate: 47.2,
-          totalTrades: 42,
-          bestTrade: 4800.0,
-          lastActive: "2025-12-07T10:05:00",
-          joinDate: "2025-03-22",
-        },
-        {
-          id: 11,
-          rank: 11,
-          username: "NOVUS",
-          displayName: "Novus Equity",
-          portfolioValue: 362_100.5,
-          totalReturn: -1200.5,
-          returnPercent: -0.33,
-          winRate: 44.0,
-          totalTrades: 35,
-          bestTrade: 3000.0,
-          lastActive: "2025-12-06T09:00:00",
-          joinDate: "2025-02-14",
-        },
-        {
-          id: 12,
-          rank: 12,
-          username: "RELIC",
-          displayName: "Relic Traders",
-          portfolioValue: 298_750.0,
-          totalReturn: -12450.0,
-          returnPercent: -4.0,
-          winRate: 40.1,
-          totalTrades: 28,
-          bestTrade: 2500.0,
-          lastActive: "2025-12-05T18:30:00",
-          joinDate: "2025-01-05",
-        },
-      ];
+    let cancelled = false;
 
-      setStandings(mockStandings);
-      setLoading(false);
-    }, 500);
+    const fetchStandings = async () => {
+      setLoading(true);
+      try {
+        let rows: any[] | null = null;
+
+        // Preferred: server-side ordering by realized_pnl (descending)
+        try {
+          const { data, error } = await supabase
+            .from("profiles")
+            .select(
+              "society_name, equity_value, realized_pnl, return_percent, win_rate, total_trades, best_trade, last_active, join_date"
+            )
+            .order("realized_pnl", { ascending: false });
+
+          if (!error && data) {
+            rows = data as any[];
+          } else if (error) {
+            console.warn(
+              "Supabase ordered query error - falling back to client-side sort:",
+              error.message ?? error
+            );
+          }
+        } catch (err) {
+          console.warn("Supabase ordered query threw; falling back:", err);
+        }
+
+        // Fallback: select all and sort locally
+        if (!rows) {
+          const { data, error } = await supabase.from("profiles").select("*");
+          if (error)
+            console.error(
+              "Supabase select('*') error:",
+              error.message ?? error
+            );
+          rows = data as any[] | null;
+        }
+
+        if (cancelled) return;
+
+        if (!rows || rows.length === 0) {
+          setStandings([]);
+          setLoading(false);
+          return;
+        }
+
+        // Sort by realized_pnl (use common fallbacks if naming differs)
+        const sorted = [...rows].sort((a: any, b: any) => {
+          const aPnl = Number(
+            a.realized_pnl ?? a.realizedPnl ?? a.total_pnl ?? a.totalPnl ?? 0
+          );
+          const bPnl = Number(
+            b.realized_pnl ?? b.realizedPnl ?? b.total_pnl ?? b.totalPnl ?? 0
+          );
+          return bPnl - aPnl;
+        });
+
+        const mapped: Standing[] = sorted.map((r: any, idx: number) => ({
+          // keep internal id for matching/highlighting but do NOT render it
+          id: r.id ?? idx + 1,
+          rank: idx + 1,
+          // Only use society_name for UI display names per requirement
+          displayName: r.society_name ?? `Society ${idx + 1}`,
+          portfolioValue: Number(
+            r.equity_value ??
+              r.equityValue ??
+              r.portfolio_value ??
+              r.portfolioValue ??
+              0
+          ),
+          totalReturn: Number(
+            r.realized_pnl ?? r.realizedPnl ?? r.total_pnl ?? r.totalPnl ?? 0
+          ),
+          returnPercent: Number(r.return_percent ?? r.returnPercent ?? 0),
+          winRate: Number(r.win_rate ?? r.winRate ?? 0),
+          totalTrades: Number(r.total_trades ?? r.totalTrades ?? 0),
+          bestTrade: Number(r.best_trade ?? r.bestTrade ?? 0),
+          lastActive:
+            r.last_active ??
+            r.lastActive ??
+            r.updated_at ??
+            r.created_at ??
+            new Date().toISOString(),
+          joinDate: r.join_date ?? r.joinDate ?? undefined,
+        }));
+
+        setStandings(mapped);
+        setLoading(false);
+      } catch (err) {
+        console.error("Unexpected error fetching standings:", err);
+        if (!cancelled) {
+          setStandings([]);
+          setLoading(false);
+        }
+      }
+    };
+
+    fetchStandings();
+
+    return () => {
+      cancelled = true;
+    };
   }, [timeframe]);
 
   const formatCurrency = (value: number) => {
@@ -317,7 +246,7 @@ export default function Standings() {
             if (!trader) return null;
             return (
               <div
-                key={trader.id}
+                key={`${trader.displayName}-${trader.rank}`}
                 className={`podium-card rank-${trader.rank} ${
                   trader.id === currentUserId ? "current-user" : ""
                 } ${idx === 1 ? "podium-center" : ""}`}
@@ -325,10 +254,10 @@ export default function Standings() {
                 <div className="podium-rank">{getRankIcon(trader.rank)}</div>
                 <div className="podium-user">
                   <div className="podium-avatar">
-                    {(trader.username || "?").charAt(0).toUpperCase()}
+                    {(trader.displayName || "?").charAt(0).toUpperCase()}
                   </div>
                   <h3>{trader.displayName}</h3>
-                  <p className="podium-username">@{trader.username}</p>
+                  {/* username intentionally omitted; show only society name */}
                 </div>
                 <div className="podium-stats">
                   <div className="podium-stat">
@@ -385,7 +314,7 @@ export default function Standings() {
             <tbody>
               {standings.map((trader: any) => (
                 <tr
-                  key={trader.id}
+                  key={`${trader.displayName}-${trader.rank}`}
                   className={`standings-row ${
                     trader.id === currentUserId ? "current-user-row" : ""
                   }`}
@@ -398,13 +327,11 @@ export default function Standings() {
                   <td>
                     <div className="trader-cell">
                       <div className="trader-avatar">
-                        {(trader.username || "?").charAt(0).toUpperCase()}
+                        {(trader.displayName || "?").charAt(0).toUpperCase()}
                       </div>
                       <div className="trader-info">
                         <strong>{trader.displayName}</strong>
-                        <span className="trader-username">
-                          @{trader.username}
-                        </span>
+                        {/* username intentionally omitted; only show society name */}
                       </div>
                       {trader.id === currentUserId && (
                         <span className="you-badge">Your Society</span>
