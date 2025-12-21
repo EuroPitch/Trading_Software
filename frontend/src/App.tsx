@@ -5,15 +5,16 @@ import Error404 from "./pages/404";
 import Portfolio from "./pages/Portfolio/Portfolio";
 import StockMetrics from "./pages/Stocks/StockMetrics";
 import Standings from "./pages/Standings/Standings";
-import Login from "./pages/Auth/Login";
 import { ProtectedRoute } from "./ProtectedRoute";
+import { HomeRoute } from "./HomeRoute";
 
-function App() {
+export default function App() {
   return (
     <Router>
       <Routes>
         <Route path="/" element={<Layout />}>
-          <Route index element={<Login />} />
+          {/* If authed -> /portfolio, else show Login */}
+          <Route index element={<HomeRoute />} />
 
           <Route element={<ProtectedRoute />}>
             <Route path="portfolio" element={<Portfolio />} />
@@ -22,10 +23,9 @@ function App() {
 
           <Route path="*" element={<Error404 />} />
         </Route>
+
         <Route path="/standings" element={<Standings />} />
       </Routes>
     </Router>
   );
 }
-
-export default App;
