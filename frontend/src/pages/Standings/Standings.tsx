@@ -3,66 +3,35 @@ import "./Standings.css";
 import { supabase } from "../../supabaseClient";
 
 type Standing = {
+  id?: number | string; // internal only, not rendered explicitly
   rank: number;
-  displayName: string;
-  portfolioValue: number;
-  totalReturn: number;
-  returnPercent: number;
-  winRate: number;
-  totalTrades: number;
-  bestTrade: number;
-  lastActive: string;
-  joinDate?: string;
-  // internal id kept for matching/highlighting but must NOT be rendered
-  id?: number | string;
+  displayName: string;      // society_name
+  portfolioValue: number;   // total_equity (Funds)
+  totalReturn: number;      // realized_pnl (PnL)
+  returnPercent: number;    // derived from totalReturn / portfolioValue
 };
 
 export default function Standings() {
   const [standings, setStandings] = useState<Standing[]>([]);
   const [timeframe, setTimeframe] = useState<string>("all-time");
   const [loading, setLoading] = useState<boolean>(true);
-  const currentUserId: number | null = 3; // This would come from your auth context later
+  const currentUserId: number | null = 3; // placeholder until auth wired
 
-  // Fetch live standings from Supabase `profiles` table and rank by `realized_pnl`.
   useEffect(() => {
     let cancelled = false;
 
     const fetchStandings = async () => {
       setLoading(true);
       try {
-        let rows: any[] | null = null;
+        const { data, error } = await supabase
+          .from("profiles")
+          .select("id, society_name, total_equity, realized_pnl");
 
-        // Preferred: server-side ordering by realized_pnl (descending)
-        try {
-          const { data, error } = await supabase
-            .from("profiles")
-            .select(
-              "society_name, equity_value, realized_pnl, return_percent, win_rate, total_trades, best_trade, last_active, join_date"
-            )
-            .order("realized_pnl", { ascending: false });
-
-          if (!error && data) {
-            rows = data as any[];
-          } else if (error) {
-            console.warn(
-              "Supabase ordered query error - falling back to client-side sort:",
-              error.message ?? error
-            );
-          }
-        } catch (err) {
-          console.warn("Supabase ordered query threw; falling back:", err);
+        if (error) {
+          console.warn("Supabase select(...) error:", error.message ?? error);
         }
 
-        // Fallback: select all and sort locally
-        if (!rows) {
-          const { data, error } = await supabase.from("profiles").select("*");
-          if (error)
-            console.error(
-              "Supabase select('*') error:",
-              error.message ?? error
-            );
-          rows = data as any[] | null;
-        }
+        const rows = (data as any[]) || [];
 
         if (cancelled) return;
 
@@ -72,45 +41,28 @@ export default function Standings() {
           return;
         }
 
-        // Sort by realized_pnl (use common fallbacks if naming differs)
+        // Sort by realized_pnl descending
         const sorted = [...rows].sort((a: any, b: any) => {
-          const aPnl = Number(
-            a.realized_pnl ?? a.realizedPnl ?? a.total_pnl ?? a.totalPnl ?? 0
-          );
-          const bPnl = Number(
-            b.realized_pnl ?? b.realizedPnl ?? b.total_pnl ?? b.totalPnl ?? 0
-          );
+          const aPnl = Number(a.realized_pnl ?? 0);
+          const bPnl = Number(b.realized_pnl ?? 0);
           return bPnl - aPnl;
         });
 
-        const mapped: Standing[] = sorted.map((r: any, idx: number) => ({
-          // keep internal id for matching/highlighting but do NOT render it
-          id: r.id ?? idx + 1,
-          rank: idx + 1,
-          // Only use society_name for UI display names per requirement
-          displayName: r.society_name ?? `Society ${idx + 1}`,
-          portfolioValue: Number(
-            r.equity_value ??
-              r.equityValue ??
-              r.portfolio_value ??
-              r.portfolioValue ??
-              0
-          ),
-          totalReturn: Number(
-            r.realized_pnl ?? r.realizedPnl ?? r.total_pnl ?? r.totalPnl ?? 0
-          ),
-          returnPercent: Number(r.return_percent ?? r.returnPercent ?? 0),
-          winRate: Number(r.win_rate ?? r.winRate ?? 0),
-          totalTrades: Number(r.total_trades ?? r.totalTrades ?? 0),
-          bestTrade: Number(r.best_trade ?? r.bestTrade ?? 0),
-          lastActive:
-            r.last_active ??
-            r.lastActive ??
-            r.updated_at ??
-            r.created_at ??
-            new Date().toISOString(),
-          joinDate: r.join_date ?? r.joinDate ?? undefined,
-        }));
+        const mapped: Standing[] = sorted.map((r: any, idx: number) => {
+          const portfolioValue = Number(r.total_equity ?? 0);
+          const totalReturn = Number(r.realized_pnl ?? 0);
+          const returnPercent =
+            portfolioValue > 0 ? (totalReturn / portfolioValue) * 100 : 0;
+
+          return {
+            id: r.id ?? idx + 1,
+            rank: idx + 1,
+            displayName: r.society_name ?? `Society ${idx + 1}`,
+            portfolioValue,
+            totalReturn,
+            returnPercent,
+          };
+        });
 
         setStandings(mapped);
         setLoading(false);
@@ -143,20 +95,6 @@ export default function Standings() {
     return `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
   };
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
-
-    if (diffMins < 60) return `${diffMins}m ago`;
-    if (diffHours < 24) return `${diffHours}h ago`;
-    if (diffDays < 7) return `${diffDays}d ago`;
-    return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-  };
-
   const getRankBadgeClass = (rank: number) => {
     if (rank === 1) return "rank-badge gold";
     if (rank === 2) return "rank-badge silver";
@@ -182,7 +120,6 @@ export default function Standings() {
   const currentUser = standings.find((s) => s.id === currentUserId) || null;
   const topPerformers = standings.slice(0, 3);
 
-  // Render the podium so 1st place appears centered visually: order [2nd, 1st, 3rd]
   const podiumOrder = (() => {
     if (topPerformers.length >= 3)
       return [topPerformers[1], topPerformers[0], topPerformers[2]];
@@ -196,7 +133,7 @@ export default function Standings() {
         <div className="header-content">
           <h1>Society Standings</h1>
           <p className="header-subtitle">
-            Track your society's performance against other societies
+            Track your society&apos;s performance against other societies
           </p>
         </div>
 
@@ -257,7 +194,6 @@ export default function Standings() {
                     {(trader.displayName || "?").charAt(0).toUpperCase()}
                   </div>
                   <h3>{trader.displayName}</h3>
-                  {/* username intentionally omitted; show only society name */}
                 </div>
                 <div className="podium-stats">
                   <div className="podium-stat">
@@ -305,14 +241,11 @@ export default function Standings() {
                 <th className="align-right">Funds</th>
                 <th className="align-right">Total Return</th>
                 <th className="align-right">Return %</th>
-                <th className="align-right">Win Rate</th>
-                <th className="align-right">Total Trades</th>
-                <th className="align-right">Best Trade</th>
-                <th className="align-right">Last Active</th>
+                {/* Keeping extra columns out since DB doesn’t provide them */}
               </tr>
             </thead>
             <tbody>
-              {standings.map((trader: any) => (
+              {standings.map((trader: Standing) => (
                 <tr
                   key={`${trader.displayName}-${trader.rank}`}
                   className={`standings-row ${
@@ -331,7 +264,6 @@ export default function Standings() {
                       </div>
                       <div className="trader-info">
                         <strong>{trader.displayName}</strong>
-                        {/* username intentionally omitted; only show society name */}
                       </div>
                       {trader.id === currentUserId && (
                         <span className="you-badge">Your Society</span>
@@ -354,16 +286,6 @@ export default function Standings() {
                     }`}
                   >
                     <strong>{formatPercent(trader.returnPercent)}</strong>
-                  </td>
-                  <td className="align-right">
-                    {(trader.winRate ?? 0).toFixed(1)}%
-                  </td>
-                  <td className="align-right">{trader.totalTrades}</td>
-                  <td className="align-right positive">
-                    {formatCurrency(trader.bestTrade)}
-                  </td>
-                  <td className="align-right time-cell">
-                    {formatDate(trader.lastActive)}
                   </td>
                 </tr>
               ))}
@@ -390,8 +312,8 @@ export default function Standings() {
           </span>
         </div>
         <div className="footer-stat">
-          <span className="footer-label">Avg Return</span>
-          <span className="footer-value positive">
+          <span className="footer-label">Avg Return %</span>
+          <span className="footer-value">
             {standings.length > 0
               ? formatPercent(
                   standings.reduce((sum, s) => sum + s.returnPercent, 0) /
@@ -401,8 +323,8 @@ export default function Standings() {
           </span>
         </div>
         <div className="footer-stat">
-          <span className="footer-label">Competition Started</span>
-          <span className="footer-value">Jan 10, 2025</span>
+          <span className="footer-label">Competition To Start</span>
+          <span className="footer-value">Feb 02, 2026</span>
         </div>
       </div>
     </div>
