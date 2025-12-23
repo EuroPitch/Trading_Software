@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
-import StockDetailModal from "./StockDetailModal";
-import ComparisonPanel from "./ComparisonPanel";
+import StockDetailModal from "../StockDetailModal/StockDetailModal";
+import ComparisonPanel from "../ComparisonPanel/ComparisonPanel";
+import StockOrderModal from "../StockOrderModal/StockOrderModal";
 import "./StockMetrics.css";
 
 // The component will load a tickers list from the public folder (public/nyse_tickers.json)

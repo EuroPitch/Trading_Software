@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import "./StockDetailModal.css";
+import StockOrderModal from "../StockOrderModal/StockOrderModal";
 
 export default function StockDetailModal({ stock, onClose }: any) {
   const [activeTab, setActiveTab] = useState("valuation");
@@ -135,36 +136,74 @@ export default function StockDetailModal({ stock, onClose }: any) {
         </div>
 
         <div className="modal-tabs">
-          {Object.keys(tabs).map((tab: string) => (
-            <button
-              key={tab}
-              className={`tab-button ${activeTab === tab ? "active" : ""}`}
-              onClick={() => setActiveTab(tab)}
-            >
-              {tab.charAt(0).toUpperCase() + tab.slice(1)}
-            </button>
-          ))}
+          <button
+            className={`tab-button ${activeTab === "valuation" ? "active" : ""}`}
+            onClick={() => setActiveTab("valuation")}
+          >
+            Valuation
+          </button>
+          <button
+            className={`tab-button ${activeTab === "profitability" ? "active" : ""}`}
+            onClick={() => setActiveTab("profitability")}
+          >
+            Profitability
+          </button>
+          <button
+            className={`tab-button ${activeTab === "growth" ? "active" : ""}`}
+            onClick={() => setActiveTab("growth")}
+          >
+            Growth
+          </button>
+          <button
+            className={`tab-button ${activeTab === "technical" ? "active" : ""}`}
+            onClick={() => setActiveTab("technical")}
+          >
+            Technical
+          </button>
+          <button
+            className={`tab-button ${activeTab === "financial" ? "active" : ""}`}
+            onClick={() => setActiveTab("financial")}
+          >
+            Financial
+          </button>
+          <button
+            className={`tab-button ${activeTab === "order" ? "active" : ""}`}
+            onClick={() => setActiveTab("order")}
+          >
+            Trade
+          </button>
         </div>
 
         <div className="modal-body">
-          <div className="metrics-grid">
-            {tabs[activeTab].map((metric: any, index: number) => (
-              <div key={index} className="metric-item">
-                <span className="metric-label">{metric.label}</span>
-                <span
-                  className={`metric-value ${
-                    metric.colored && metric.value < 0
-                      ? "negative"
-                      : metric.colored && metric.value >= 0
-                      ? "positive"
-                      : ""
-                  }`}
-                >
-                  {formatValue(metric.value, metric.format)}
-                </span>
-              </div>
-            ))}
-          </div>
+          {activeTab === "order" ? (
+            <StockOrderModal 
+              stock={stock} 
+              onClose={onClose}
+              onExecuteTrade={(trade) => {
+                console.log("Trade executed:", trade);
+                // Handle trade execution here - hook up to your Supabase or FastAPI backend
+              }}
+            />
+          ) : (
+            <div className="metrics-grid">
+              {tabs[activeTab]?.map((metric: any, index: number) => (
+                <div key={index} className="metric-item">
+                  <span className="metric-label">{metric.label}</span>
+                  <span
+                    className={`metric-value ${
+                      metric.colored && metric.value < 0
+                        ? "negative"
+                        : metric.colored && metric.value >= 0
+                        ? "positive"
+                        : ""
+                    }`}
+                  >
+                    {formatValue(metric.value, metric.format)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="modal-footer">
@@ -172,7 +211,6 @@ export default function StockDetailModal({ stock, onClose }: any) {
             Close
           </button>
           <button className="btn-primary">Add to Watchlist</button>
-          <button className="btn-primary">Execute Trade</button>
         </div>
       </div>
     </div>

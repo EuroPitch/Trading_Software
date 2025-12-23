@@ -98,7 +98,7 @@ export default function Signup() {
           <div className="auth-header">
             <div className="auth-logo">
               <div className="logo-icon">📈</div>
-              <h1>Portfolio Challenge</h1>
+              <h1>EuroPitch Portfolio Challenge</h1>
             </div>
             <h2>Register Your Society</h2>
             <p>
