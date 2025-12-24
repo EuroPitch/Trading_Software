@@ -2,6 +2,7 @@
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import Layout from "./components/Layout";
 import Error404 from "./pages/404";
+import Dashboard from "./pages/Dashboard/Dashboard";
 import Portfolio from "./pages/Portfolio/Portfolio";
 import StockMetrics from "./pages/Stocks/StockMetrics/StockMetrics";
 import Standings from "./pages/Standings/Standings";
@@ -16,6 +17,9 @@ export default function App() {
         <Route path="/" element={<Layout />}>
           {/* If authed -> /portfolio, else show Login */}
           <Route index element={<HomeRoute />} />
+
+          {/* Dashboard temporarily accessible without auth for preview */}
+          <Route path="dashboard" element={<Dashboard />} />
 
           <Route element={<ProtectedRoute />}>
             <Route path="portfolio" element={<Portfolio />} />
