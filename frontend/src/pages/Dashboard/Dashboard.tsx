@@ -117,7 +117,9 @@ export default function Dashboard() {
           throw fetchError;
         }
 
-        // Aggregate trades with position netting
+        console.log("Fetched trades:", tradesData?.length || 0);
+
+        // Aggregate trades with position netting - FIXED LOGIC
         const positionsMap = new Map();
         const symbolNameMap = new Map();
 
@@ -142,29 +144,47 @@ export default function Dashboard() {
           }
 
           const position = positionsMap.get(key)!;
+          
+          // FIXED: Proper position netting logic
           if (side === "buy") {
-            const oldQuantity = position.quantity;
-            const oldCost = position.costBasis ?? 0;
             position.quantity += quantity;
-            position.costBasis = oldCost + notional;
+            position.costBasis += notional;
           } else if (side === "sell") {
             const oldQuantity = position.quantity;
+            const oldCostBasis = position.costBasis;
+            
             position.quantity -= quantity;
-            if (oldQuantity > 0) {
-              const remainingRatio =
-                oldQuantity !== 0 ? position.quantity / oldQuantity : 0;
-              position.costBasis =
-                (position.costBasis ?? 0) * Math.max(0, remainingRatio);
-            } else {
+            
+            // If we had a long position and still do (or went flat)
+            if (oldQuantity > 0 && position.quantity >= 0) {
+              // Proportionally reduce cost basis
+              if (oldQuantity > 0) {
+                const avgCost = oldCostBasis / oldQuantity;
+                position.costBasis = position.quantity * avgCost;
+              } else {
+                position.costBasis = 0;
+              }
+            }
+            // If we went from long to short
+            else if (oldQuantity > 0 && position.quantity < 0) {
+              // Cost basis is now the short position value
               position.costBasis = Math.abs(position.quantity) * price;
+            }
+            // If we were already short, add to the short
+            else if (oldQuantity <= 0) {
+              position.costBasis += notional;
             }
           }
         });
 
+        console.log("Positions map before filter:", Array.from(positionsMap.values()));
+
         // Filter out flat positions
         const aggregatedPositions = Array.from(positionsMap.values()).filter(
-          (pos) => pos.quantity !== 0
+          (pos) => Math.abs(pos.quantity) > 0.0001 // Use small epsilon for floating point
         );
+
+        console.log("Aggregated positions after filter:", aggregatedPositions);
 
         // Get unique symbols to fetch prices for
         const symbols = [...new Set(aggregatedPositions.map((p) => p.symbol))];
@@ -234,6 +254,8 @@ export default function Dashboard() {
             positionType: pos.quantity > 0 ? "LONG" : "SHORT",
           };
         });
+
+        console.log("Detailed positions:", detailedPositions);
 
         // Calculate portfolio values
         const computedEquityValue = detailedPositions.reduce((sum, pos) => {
@@ -335,7 +357,7 @@ export default function Dashboard() {
           </div>
 
           {/* Positions Table Section */}
-          {positions.length > 0 && (
+          {positions.length > 0 ? (
             <div className="positions-section">
               <h2 className="positions-title">Active Positions</h2>
               <div className="positions-table-container">
@@ -372,7 +394,7 @@ export default function Dashboard() {
                             </span>
                           </td>
                           <td className="align-right">
-                            {Math.abs(position.quantity)}
+                            {Math.abs(position.quantity).toFixed(2)}
                           </td>
                           <td className="align-right">
                             {formatCurrency(position.entryPrice ?? 0)}
@@ -404,12 +426,19 @@ export default function Dashboard() {
                 </table>
               </div>
             </div>
+          ) : (
+            <div className="positions-section">
+              <h2 className="positions-title">Active Positions</h2>
+              <p style={{ textAlign: 'center', padding: '2rem', color: '#666' }}>
+                No active positions. Start trading to see your portfolio here.
+              </p>
+            </div>
           )}
 
           <div className="dashboard-actions">
             <h2>Quick Actions</h2>
             <div className="action-cards">
-              <Link to="/browse" className="action-card">
+              <Link to="/stocks" className="action-card">
                 <div className="action-icon">📈</div>
                 <h3>Browse Stocks</h3>
                 <p>Explore and trade stocks</p>
