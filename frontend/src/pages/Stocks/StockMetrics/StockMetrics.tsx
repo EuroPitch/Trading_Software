@@ -4,14 +4,10 @@ import ComparisonPanel from "../ComparisonPanel/ComparisonPanel";
 import StockOrderModal from "../StockOrderModal/StockOrderModal";
 import "./StockMetrics.css";
 
-// The component will load a tickers list from the public folder (public/nyse_tickers.json)
-// This file should contain an array of symbols (e.g. ["AAPL","MSFT",...]) and can
-// be replaced with a full list of NYSE symbols when you have it. Loading from the
-// public folder makes it easy to swap out without rebuilding the app.
-
 export default function StockMetrics() {
   const [stocks, setStocks] = useState([]);
   const [tickers, setTickers] = useState<string[]>([]);
+  const [sectorMapping, setSectorMapping] = useState<Record<string, string>>({});
   const [tickersLoadError, setTickersLoadError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [sortConfig, setSortConfig] = useState({
@@ -37,8 +33,7 @@ export default function StockMetrics() {
   const [sectorFilter, setSectorFilter] = useState("all");
   const [loading, setLoading] = useState(true);
 
-  const API_BASE_URL = "https://europitch-trading-prices.vercel.app"; // change if needed
-  // Chunk size for backend requests to avoid very long query strings
+  const API_BASE_URL = "https://europitch-trading-prices.vercel.app";
   const FETCH_CHUNK_SIZE = 50;
 
   const allColumns = [
@@ -67,37 +62,33 @@ export default function StockMetrics() {
     { key: "beta", label: "Beta", format: "decimal" },
   ];
 
-  // Fetch on mount + background refresh every 5s without UI flicker
-  // Load the static tickers file once on mount. The frontend will only use
-  // this list (no fallbacks or dynamic sources). If the file cannot be
-  // loaded, we show an error and stop.
+  // Load tickers from API with sector mapping
   useEffect(() => {
     let mounted = true;
 
     const loadTickers = async () => {
       try {
-        const res = await fetch("/nyse_tickers.json");
+        const res = await fetch(`${API_BASE_URL}/equities/universe`);
+        
         if (!res.ok) {
-          throw new Error(`Failed to load /nyse_tickers.json: ${res.status}`);
+          throw new Error(`Failed to load universe from API: ${res.status}`);
         }
+        
         const json = await res.json();
-        let symbols: string[] = [];
-        if (Array.isArray(json)) symbols = json as string[];
-        else if (typeof json === "object" && json !== null)
-          symbols = Object.values(json) as string[];
-        else throw new Error("Invalid format for nyse_tickers.json");
+        const symbols = json.symbols || [];
+        const mapping = json.sector_mapping || {};
 
         if (mounted) {
           if (symbols.length === 0) {
-            setTickersLoadError(
-              "Ticker list is empty. Please populate /nyse_tickers.json with symbols."
-            );
+            setTickersLoadError("Ticker list is empty from API.");
           } else {
             setTickers(symbols);
+            setSectorMapping(mapping);
+            console.log(`Loaded ${symbols.length} tickers from API with sector mapping`);
           }
         }
       } catch (err: any) {
-        console.error("Error loading static tickers", err);
+        console.error("Error loading tickers from API", err);
         if (mounted) setTickersLoadError(err.message || String(err));
       }
     };
@@ -107,12 +98,12 @@ export default function StockMetrics() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [API_BASE_URL]);
 
-  // Fetch prices/fundamentals in batches whenever the static tickers list is set
+  // Fetch prices/fundamentals in batches whenever the tickers list is set
   useEffect(() => {
     if (tickersLoadError) return;
-    if (!tickers || tickers.length === 0) return; // wait until tickers loaded
+    if (!tickers || tickers.length === 0) return;
 
     let isFirst = true;
     let intervalId: any;
@@ -152,7 +143,7 @@ export default function StockMetrics() {
           id: idx + 1,
           symbol: row.symbol || "",
           name: row.name || row.symbol || "",
-          sector: row.sector || "Unknown",
+          sector: sectorMapping[row.symbol] || row.sector || "Unknown",
           price: row.price || 0,
           change:
             row.price && row.previous_close
@@ -202,7 +193,7 @@ export default function StockMetrics() {
 
     // Initial load
     fetchStocks();
-    // Background refresh every 10 seconds (less aggressive when loading many symbols)
+    // Background refresh every 10 seconds
     intervalId = setInterval(fetchStocks, 10000);
 
     return () => {
@@ -210,7 +201,7 @@ export default function StockMetrics() {
     };
   }, [tickers, tickersLoadError, API_BASE_URL]);
 
-  // Track collapsed state for each sector (true -> collapsed)
+  // Track collapsed state for each sector
   const [collapsedSectors, setCollapsedSectors] = useState<
     Record<string, boolean>
   >({});
@@ -245,7 +236,7 @@ export default function StockMetrics() {
     return filtered;
   }, [stocks, searchTerm, sectorFilter, sortConfig]);
 
-  // Group filtered stocks by sector for display (must be a hook call before any early returns)
+  // Group filtered stocks by sector for display
   const groupedBySector = useMemo(() => {
     const groups: Record<string, any[]> = {};
     filteredAndSortedStocks.forEach((s) => {

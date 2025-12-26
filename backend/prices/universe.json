@@ -1,0 +1,191 @@
+{
+  "sectors": {
+    "financials_banks": {
+      "name": "Financials (Banks)",
+      "stocks": [
+        {
+          "ticker": "JPM",
+          "name": "JPMorgan Chase"
+        },
+        {
+          "ticker": "BAC",
+          "name": "Bank of America"
+        },
+        {
+          "ticker": "C",
+          "name": "Citigroup"
+        },
+        {
+          "ticker": "WFC",
+          "name": "Wells Fargo"
+        },
+        {
+          "ticker": "USB",
+          "name": "U.S. Bancorp"
+        },
+        {
+          "ticker": "PNC",
+          "name": "PNC Financial Services"
+        }
+      ]
+    },
+    "financials_non_banks": {
+      "name": "Financials (Non-Banks)",
+      "stocks": [
+        {
+          "ticker": "SCHW",
+          "name": "Charles Schwab"
+        },
+        {
+          "ticker": "V",
+          "name": "Visa"
+        },
+        {
+          "ticker": "MA",
+          "name": "Mastercard"
+        },
+        {
+          "ticker": "AXP",
+          "name": "American Express"
+        },
+        {
+          "ticker": "BLK",
+          "name": "BlackRock"
+        }
+      ]
+    },
+    "tech": {
+      "name": "Technology",
+      "stocks": [
+        {
+          "ticker": "AAPL",
+          "name": "Apple"
+        },
+        {
+          "ticker": "MSFT",
+          "name": "Microsoft"
+        },
+        {
+          "ticker": "GOOGL",
+          "name": "Alphabet (Google)"
+        },
+        {
+          "ticker": "META",
+          "name": "Meta (Facebook)"
+        },
+        {
+          "ticker": "AMZN",
+          "name": "Amazon"
+        },
+        {
+          "ticker": "NVDA",
+          "name": "Nvidia"
+        },
+        {
+          "ticker": "TSLA",
+          "name": "Tesla"
+        },
+        {
+          "ticker": "NFLX",
+          "name": "Netflix"
+        }
+      ]
+    },
+    "energy_utilities": {
+      "name": "Energy & Utilities",
+      "stocks": [
+        {
+          "ticker": "XOM",
+          "name": "ExxonMobil"
+        },
+        {
+          "ticker": "CVX",
+          "name": "Chevron"
+        },
+        {
+          "ticker": "NEE",
+          "name": "NextEra Energy"
+        },
+        {
+          "ticker": "DUK",
+          "name": "Duke Energy"
+        },
+        {
+          "ticker": "XEL",
+          "name": "Xcel Energy"
+        },
+        {
+          "ticker": "D",
+          "name": "Dominion Energy"
+        }
+      ]
+    },
+    "healthcare": {
+      "name": "Healthcare",
+      "stocks": [
+        {
+          "ticker": "JNJ",
+          "name": "Johnson & Johnson"
+        },
+        {
+          "ticker": "UNH",
+          "name": "UnitedHealth Group"
+        },
+        {
+          "ticker": "PFE",
+          "name": "Pfizer"
+        },
+        {
+          "ticker": "ABBV",
+          "name": "AbbVie"
+        },
+        {
+          "ticker": "TMO",
+          "name": "Thermo Fisher Scientific"
+        },
+        {
+          "ticker": "LLY",
+          "name": "Eli Lilly"
+        },
+        {
+          "ticker": "MRK",
+          "name": "Merck"
+        }
+      ]
+    },
+    "industrials": {
+      "name": "Industrials",
+      "stocks": [
+        {
+          "ticker": "BA",
+          "name": "Boeing"
+        },
+        {
+          "ticker": "CAT",
+          "name": "Caterpillar"
+        },
+        {
+          "ticker": "GE",
+          "name": "General Electric"
+        },
+        {
+          "ticker": "HON",
+          "name": "Honeywell"
+        },
+        {
+          "ticker": "UPS",
+          "name": "United Parcel Service"
+        },
+        {
+          "ticker": "RTX",
+          "name": "Raytheon Technologies"
+        }
+      ]
+    }
+  },
+  "metadata": {
+    "total_stocks": 38,
+    "competition_name": "EuroPitch Trading Competition Stock Universe",
+    "last_updated": "2025-12-26"
+  }
+}
