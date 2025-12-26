@@ -28,12 +28,6 @@ type TradingStats = {
 
 type Position = {
   symbol: string;
-  quantity: number;
-  costBasis: number;
-  entryPrice: number;
-  positionType: "LONG" | "SHORT";
-type Position = {
-  symbol: string;
   name?: string;
   quantity: number;
   costBasis: number;
@@ -58,7 +52,6 @@ export default function Dashboard() {
     initialCapital: 100000,
     positionCount: 0,
   });
-  const [positions, setPositions] = useState<Position[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [tradingStats, setTradingStats] = useState<TradingStats>({
@@ -104,7 +97,7 @@ export default function Dashboard() {
     }
 
     const quantity = Math.abs(position.quantity);
-    
+
     if (position.positionType === "LONG") {
       // LONG: profit when currentPrice > entryPrice
       return (currentPrice - position.entryPrice) * quantity;
@@ -117,7 +110,7 @@ export default function Dashboard() {
   // Fetch prices from API
   const fetchPrices = async (symbols: string[]): Promise<Map<string, number>> => {
     const priceMap = new Map<string, number>();
-    
+
     if (symbols.length === 0) return priceMap;
 
     try {
@@ -159,7 +152,6 @@ export default function Dashboard() {
   };
 
   // Recalculate portfolio metrics from current positions and prices
-  // This function is called whenever positions or prices change
   useEffect(() => {
     if (positions.length === 0) {
       setSummary({
@@ -179,7 +171,7 @@ export default function Dashboard() {
 
     positions.forEach((pos) => {
       const currentPrice = priceMap.get(pos.symbol.toUpperCase().trim()) ?? 0;
-      
+
       if (currentPrice > 0) {
         const quantity = Math.abs(pos.quantity);
         const marketValue = quantity * currentPrice;
@@ -208,19 +200,13 @@ export default function Dashboard() {
     });
   }, [positions, priceMap, initialCapital]);
 
-  const calculatePnL = (position: Position) => {
-    const marketValue = position.marketValue ?? 0;
-    const costBasis = Math.abs(position.costBasis ?? 0);
-
-    if (position.quantity > 0) {
-      return marketValue - costBasis;
-    } else {
-      return costBasis - marketValue;
-    }
+  const calculatePnLForDisplay = (position: Position) => {
+    const currentPrice = priceMap.get(position.symbol.toUpperCase().trim()) ?? position.currentPrice;
+    return calculatePnL(position, currentPrice);
   };
 
   const calculatePnLPercent = (position: Position) => {
-    const pnl = calculatePnL(position);
+    const pnl = calculatePnLForDisplay(position);
     const costBasis = Math.abs(position.costBasis ?? 0);
     if (costBasis === 0) return 0;
     return (pnl / costBasis) * 100;
@@ -237,25 +223,28 @@ export default function Dashboard() {
           return;
         }
 
-      // Fetch initial capital AND society_name from profiles table
-      let initialCapital = 100000;
-      let fetchedSocietyName = "Society";
+        // Fetch initial capital AND society_name from profiles table
+        let initialCapital = 100000;
+        let fetchedSocietyName = "Society";
 
-      try {
-        const { data: profileData } = await supabase
-          .from("profiles")
-          .select("society_name")  // Add society_name here
-          .eq("id", userId)
-          .single();
+        try {
+          const { data: profileData } = await supabase
+            .from("profiles")
+            .select("society_name, initial_capital")
+            .eq("id", userId)
+            .single();
 
-        
-        if (profileData?.society_name) {
-          fetchedSocietyName = profileData.society_name;
-          setSocietyName(fetchedSocietyName);  // Store in state
+          if (profileData?.initial_capital) {
+            initialCapital = Number(profileData.initial_capital);
+          }
+
+          if (profileData?.society_name) {
+            fetchedSocietyName = profileData.society_name;
+            setSocietyName(fetchedSocietyName);
+          }
+        } catch (err) {
+          console.warn("Could not fetch profile data, using defaults");
         }
-      } catch (err) {
-        console.warn("Could not fetch profile data, using defaults");
-      }
 
         // Fetch all trades for this user
         const { data: tradesData, error: fetchError } = await supabase
@@ -269,12 +258,10 @@ export default function Dashboard() {
         }
 
         // Aggregate trades with position netting
-        const positionsMap = new Map<string, Position>();
-        console.log("Fetched trades:", tradesData?.length || 0);
-
-        // Aggregate trades with position netting - FIXED LOGIC
         const positionsMap = new Map();
         const symbolNameMap = new Map();
+
+        console.log("Fetched trades:", tradesData?.length || 0);
 
         (tradesData ?? []).forEach((trade: any) => {
           const symbol = (trade.symbol ?? "").toUpperCase().trim();
@@ -283,8 +270,6 @@ export default function Dashboard() {
           const price = Number(trade.price ?? 0);
           const notional = Number(trade.notional ?? quantity * price);
 
-          if (!positionsMap.has(symbol)) {
-            positionsMap.set(symbol, {
           const key = symbol;
 
           if (trade.name) {
@@ -301,54 +286,18 @@ export default function Dashboard() {
             });
           }
 
-          const position = positionsMap.get(symbol)!;
-
-          if (side === "buy") {
-            const oldQuantity = position.quantity;
-            const oldCost = position.costBasis;
-
-            position.quantity += quantity;
-            position.costBasis = oldCost + notional;
-
-            if (position.quantity > 0) {
-              position.entryPrice = position.costBasis / position.quantity;
-              position.positionType = "LONG";
-            } else if (position.quantity < 0) {
-              position.entryPrice = price;
-              position.positionType = "SHORT";
-            }
           const position = positionsMap.get(key)!;
-          
-          // FIXED: Proper position netting logic
+
+          // Position netting logic
           if (side === "buy") {
             position.quantity += quantity;
             position.costBasis += notional;
           } else if (side === "sell") {
             const oldQuantity = position.quantity;
             const oldCostBasis = position.costBasis;
-            
+
             position.quantity -= quantity;
 
-            if (oldQuantity > 0) {
-              // Closing or reducing LONG position
-              const remainingRatio =
-                oldQuantity !== 0 ? position.quantity / oldQuantity : 0;
-              position.costBasis = position.costBasis * Math.max(0, remainingRatio);
-
-              if (position.quantity > 0) {
-                position.entryPrice = position.costBasis / position.quantity;
-                position.positionType = "LONG";
-              } else if (position.quantity < 0) {
-                // Flipped to SHORT
-                position.entryPrice = price;
-                position.positionType = "SHORT";
-                position.costBasis = Math.abs(position.quantity) * price;
-              }
-            } else {
-              // Opening or adding to SHORT position
-              position.entryPrice = price;
-              position.positionType = "SHORT";
-            
             // If we had a long position and still do (or went flat)
             if (oldQuantity > 0 && position.quantity >= 0) {
               // Proportionally reduce cost basis
@@ -375,11 +324,10 @@ export default function Dashboard() {
 
         // Filter out flat positions
         const aggregatedPositions = Array.from(positionsMap.values()).filter(
-          (pos) => Math.abs(pos.quantity) > 0.0001 // Use small epsilon for floating point
+          (pos) => Math.abs(pos.quantity) > 0.0001
         );
 
-        // Store positions
-        setPositions(aggregatedPositions);
+        // Store initial capital
         setInitialCapital(initialCapital);
         console.log("Aggregated positions after filter:", aggregatedPositions);
 
@@ -402,6 +350,31 @@ export default function Dashboard() {
 
         // Refresh prices every 15 seconds
         priceIntervalRef.current = setInterval(updatePrices, 15_000);
+
+        // Build detailed positions array with all info
+        const detailedPositions: Position[] = aggregatedPositions.map((pos) => {
+          const priceFromMap = priceMap.get(pos.symbol);
+          const currentPrice =
+            priceFromMap ??
+            (pos.quantity !== 0 ? Math.abs(pos.costBasis) / Math.abs(pos.quantity) : 0);
+          const marketValue = Math.abs(pos.quantity) * currentPrice;
+          const entryPrice =
+            pos.quantity !== 0 ? Math.abs(pos.costBasis) / Math.abs(pos.quantity) : 0;
+
+          return {
+            symbol: pos.symbol,
+            name: symbolNameMap.get(pos.symbol) || pos.symbol,
+            quantity: pos.quantity,
+            costBasis: pos.costBasis,
+            currentPrice: currentPrice,
+            marketValue: marketValue,
+            entryPrice: entryPrice,
+            positionType: pos.quantity > 0 ? "LONG" : "SHORT",
+          };
+        });
+
+        console.log("Detailed positions:", detailedPositions);
+        setPositions(detailedPositions);
 
         // Calculate trading statistics
         const trades = tradesData ?? [];
@@ -455,103 +428,8 @@ export default function Dashboard() {
           tradesToday,
           tradesThisWeek,
           totalNotional,
-        // Fetch current prices from API
-        let priceMap = new Map();
-        if (symbols.length > 0) {
-          try {
-            const symbolParams = symbols.map((s) => `symbols=${s}`).join("&");
-            const priceResponse = await fetch(
-              `https://europitch-trading-prices.vercel.app/equities/quotes?${symbolParams}&chunk_size=50`
-            );
-
-            if (priceResponse.ok) {
-              const priceData = await priceResponse.json();
-              if (Array.isArray(priceData)) {
-                priceData.forEach((item: any) => {
-                  priceMap.set(
-                    item.symbol ?? item.ticker,
-                    Number(
-                      item.price ??
-                        item.last ??
-                        item.close ??
-                        item.current ??
-                        0
-                    )
-                  );
-                });
-              } else {
-                Object.entries(priceData).forEach(([symbol, data]: [string, any]) => {
-                  priceMap.set(
-                    symbol,
-                    Number(
-                      data.price ??
-                        data.last ??
-                        data.close ??
-                        data.current ??
-                        0
-                    )
-                  );
-                });
-              }
-            }
-          } catch (priceError) {
-            console.error("Failed to fetch prices:", priceError);
-          }
-        }
-
-        // Build detailed positions array with all info
-        const detailedPositions: Position[] = aggregatedPositions.map((pos) => {
-          const priceFromMap = priceMap.get(pos.symbol);
-          const currentPrice =
-            priceFromMap ??
-            (pos.quantity !== 0 ? Math.abs(pos.costBasis) / Math.abs(pos.quantity) : 0);
-          const marketValue = Math.abs(pos.quantity) * currentPrice;
-          const entryPrice =
-            pos.quantity !== 0 ? Math.abs(pos.costBasis) / Math.abs(pos.quantity) : 0;
-
-          return {
-            symbol: pos.symbol,
-            name: symbolNameMap.get(pos.symbol) || pos.symbol,
-            quantity: pos.quantity,
-            costBasis: pos.costBasis,
-            currentPrice: currentPrice,
-            marketValue: marketValue,
-            entryPrice: entryPrice,
-            positionType: pos.quantity > 0 ? "LONG" : "SHORT",
-          };
         });
 
-        console.log("Detailed positions:", detailedPositions);
-
-        // Calculate portfolio values
-        const computedEquityValue = detailedPositions.reduce((sum, pos) => {
-          return sum + pos.marketValue;
-        }, 0);
-
-        const computedTotalCost = aggregatedPositions.reduce((sum, pos) => {
-          return sum + Math.abs(pos.costBasis ?? 0);
-        }, 0);
-
-        const cashBalance = initialCapital - computedTotalCost;
-        const totalPortfolioValue = computedEquityValue + cashBalance;
-
-        const computedTotalPnL = detailedPositions.reduce((sum, pos) => {
-          return sum + calculatePnL(pos);
-        }, 0);
-
-        const computedTotalPnLPercent =
-          initialCapital === 0 ? 0 : (computedTotalPnL / initialCapital) * 100;
-
-        setSummary({
-          totalValue: totalPortfolioValue,
-          totalPnL: computedTotalPnL,
-          totalPnLPercent: computedTotalPnLPercent,
-          cashBalance: cashBalance,
-          initialCapital: initialCapital,
-          positionCount: aggregatedPositions.length,
-        });
-
-        setPositions(detailedPositions);
       } catch (err: any) {
         console.error("Error fetching dashboard data:", err?.message ?? err);
         setError(err?.message ?? "An error occurred while fetching dashboard data");
@@ -723,7 +601,8 @@ export default function Dashboard() {
                   </thead>
                   <tbody>
                     {positions.map((position, idx) => {
-                      const pnl = calculatePnL(position);
+                      const currentPrice = priceMap.get(position.symbol.toUpperCase().trim()) ?? position.currentPrice;
+                      const pnl = calculatePnLForDisplay(position);
                       const pnlPercent = calculatePnLPercent(position);
 
                       return (
@@ -746,10 +625,10 @@ export default function Dashboard() {
                             {formatCurrency(position.entryPrice ?? 0)}
                           </td>
                           <td className="align-right">
-                            {formatCurrency(position.currentPrice ?? 0)}
+                            {formatCurrency(currentPrice)}
                           </td>
                           <td className="align-right">
-                            {formatCurrency(position.marketValue ?? 0)}
+                            {formatCurrency(Math.abs(position.quantity) * currentPrice)}
                           </td>
                           <td
                             className={`align-right ${

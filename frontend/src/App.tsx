@@ -18,7 +18,6 @@ export default function App() {
 
           {/* Dashboard and Portfolio temporarily accessible without auth for preview */}
           <Route path="dashboard" element={<Dashboard />} />
-          <Route path="portfolio" element={<Portfolio />} />
 
           <Route element={<ProtectedRoute />}>
             <Route path="stocks" element={<StockMetrics />} />
