@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 import os
 import json
 
-# LOAD ENV FIRST
+# Load env variables first
 load_dotenv()
 
 from price_service import PriceService 
@@ -12,11 +12,10 @@ from price_service import PriceService
 app = Flask(__name__)
 CORS(app)
 
-# Global variable placeholder
+# Global service variable
 price_service = None
 
-# ONLY initialize if we are in the reloader process (or if reloader is off)
-# This prevents the "Double Garry" problem
+# Initialize only if main process (avoids double-init with Flask reloader)
 if os.environ.get("WERKZEUG_RUN_MAIN") == "true" or os.environ.get("FLASK_ENV") == "production":
     price_service = PriceService()
     price_service.start()
@@ -29,9 +28,12 @@ def root():
 
 @app.route("/equities/quotes", methods=["GET"])
 def get_equity_quotes():
-    # If request hits the wrong process (rare but possible during boot), handle gracefully
+    """
+    GET /equities/quotes?symbols=AAPL&symbols=MSFT
+    """
+    # If service hasn't started yet (race condition during boot), wait a tick
     if price_service is None:
-         return jsonify({"error": "PriceService is warming up, hold your horses"}), 503
+        return jsonify({"error": "Service initializing..."}), 503
 
     symbols = request.args.getlist("symbols")
     if not symbols:
@@ -49,7 +51,6 @@ def get_equity_quotes():
 
 @app.route("/equities/universe", methods=["GET"])
 def get_universe():
-    # ... (Keep your existing universe logic here, it was fine) ...
     try:
         base = os.path.dirname(__file__)
         path = os.path.join(base, "universe.json")
