@@ -12,15 +12,11 @@ from price_service import PriceService
 app = Flask(__name__)
 CORS(app)
 
-# Global service variable
-price_service = None
-
-# Initialize only if main process (avoids double-init with Flask reloader)
-if os.environ.get("WERKZEUG_RUN_MAIN") == "true" or os.environ.get("FLASK_ENV") == "production":
-    price_service = PriceService()
-    price_service.start()
-else:
-    print("INFO: Main process started. Waiting for reloader worker to spawn PriceService...")
+# --- THE FIX: START IT UNCONDITIONALLY ---
+print("INFO: Starting PriceService...")
+price_service = PriceService()
+price_service.start()
+# -----------------------------------------
 
 @app.route("/", methods=["GET"])
 def root():
@@ -31,10 +27,8 @@ def get_equity_quotes():
     """
     GET /equities/quotes?symbols=AAPL&symbols=MSFT
     """
-    # If service hasn't started yet (race condition during boot), wait a tick
-    if price_service is None:
-        return jsonify({"error": "Service initializing..."}), 503
-
+    # Removed the 'if None' check because it's impossible now
+    
     symbols = request.args.getlist("symbols")
     if not symbols:
         return jsonify({"error": "No symbols provided"}), 400
