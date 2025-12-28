@@ -33,7 +33,8 @@ export default function StockMetrics() {
   const [sectorFilter, setSectorFilter] = useState("all");
   const [loading, setLoading] = useState(true);
 
-  const API_BASE_URL = "https://trading-software.onrender.com";
+  // --- HARDCODED RENDER URL (The Fix) ---
+  const API_BASE_URL = "https://trading-software.onrender.com"; 
   const FETCH_CHUNK_SIZE = 50;
 
   const allColumns = [
@@ -68,6 +69,7 @@ export default function StockMetrics() {
 
     const loadTickers = async () => {
       try {
+        console.log(`Fetching universe from: ${API_BASE_URL}/equities/universe`);
         const res = await fetch(`${API_BASE_URL}/equities/universe`);
         
         if (!res.ok) {
@@ -98,7 +100,7 @@ export default function StockMetrics() {
     return () => {
       mounted = false;
     };
-  }, [API_BASE_URL]);
+  }, []);
 
   // Fetch prices/fundamentals in batches whenever the tickers list is set
   useEffect(() => {
@@ -125,7 +127,7 @@ export default function StockMetrics() {
         for (const chunk of chunks) {
           const params = new URLSearchParams();
           chunk.forEach((sym) => params.append("symbols", sym));
-          params.append("chunk_size", String(FETCH_CHUNK_SIZE));
+          // params.append("chunk_size", String(FETCH_CHUNK_SIZE)); // Backend ignores this anyway, but kept for clarity
 
           const res = await fetch(
             `${API_BASE_URL}/equities/quotes?${params.toString()}`
@@ -145,39 +147,29 @@ export default function StockMetrics() {
           name: row.name || row.symbol || "",
           sector: sectorMapping[row.symbol] || row.sector || "Unknown",
           price: row.price || 0,
-          change:
-            row.price && row.previous_close
-              ? row.price - row.previous_close
-              : 0,
-          changePercent:
-            row.price && row.previous_close
-              ? ((row.price - row.previous_close) / row.previous_close) * 100
-              : 0,
+          change: row.change || 0,
+          changePercent: row.change_percent || 0,
           marketCap: row.market_cap || 0,
           volume: row.volume || 0,
           peRatio: row.pe_ratio || null,
-          pbRatio: row.pb_ratio || null,
+          pbRatio: row.price_to_book || null, // Map price_to_book to pbRatio
           pegRatio: row.peg_ratio || null,
-          dividendYield: row.dividend_yield ? row.dividend_yield * 100 : null,
-          roe: row.roe ? row.roe * 100 : null,
-          roa: row.roa ? row.roa * 100 : null,
+          dividendYield: row.dividend_yield ? row.dividend_yield : null, // Assuming backend sends percentage or decimal, careful here
+          roe: row.roe || null,
+          roa: row.roa || null,
           debtToEquity: row.debt_to_equity || null,
           currentRatio: row.current_ratio || null,
-          quickRatio: null,
-          grossMargin: row.gross_margin ? row.gross_margin * 100 : null,
-          operatingMargin: row.operating_margin
-            ? row.operating_margin * 100
-            : null,
-          netMargin: row.net_margin ? row.net_margin * 100 : null,
-          revenueGrowth: row.revenue_growth ? row.revenue_growth * 100 : null,
-          earningsGrowth: row.earnings_growth
-            ? row.earnings_growth * 100
-            : null,
+          quickRatio: row.quick_ratio || null, // Map quick_ratio
+          grossMargin: row.operating_margin || null, // Using operating margin as proxy if gross missing
+          operatingMargin: row.operating_margin || null,
+          netMargin: null, // Backend might not send this yet
+          revenueGrowth: row.revenue_growth || null,
+          earningsGrowth: null,
           rsi: row.rsi || null,
           beta: row.beta || null,
           fiftyTwoWeekHigh: row["52_week_high"] || null,
           fiftyTwoWeekLow: row["52_week_low"] || null,
-          avgVolume: null,
+          avgVolume: row.avg_volume || null,
         }));
 
         setStocks(stocksArray);
@@ -199,7 +191,7 @@ export default function StockMetrics() {
     return () => {
       clearInterval(intervalId);
     };
-  }, [tickers, tickersLoadError, API_BASE_URL]);
+  }, [tickers, tickersLoadError]);
 
   // Track collapsed state for each sector
   const [collapsedSectors, setCollapsedSectors] = useState<
@@ -284,7 +276,8 @@ export default function StockMetrics() {
         return value.toLocaleString();
 
       case "percent":
-        return `${value.toFixed(2)}%`;
+        // Adjust if backend sends 0.05 instead of 5
+        return `${(value * 1).toFixed(2)}%`;
 
       case "decimal":
         return value.toFixed(2);
