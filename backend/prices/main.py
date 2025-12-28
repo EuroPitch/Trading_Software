@@ -1,73 +1,79 @@
-# price_api.py
-
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from price_data import get_quotes_for_universe
+from dotenv import load_dotenv
 import os
 import json
 
+# LOAD ENV FIRST
+load_dotenv()
+
+from price_service import PriceService 
+
 app = Flask(__name__)
-CORS(app)  # Enable CORS for all routes
+CORS(app)
+
+# Global variable placeholder
+price_service = None
+
+# ONLY initialize if we are in the reloader process (or if reloader is off)
+# This prevents the "Double Garry" problem
+if os.environ.get("WERKZEUG_RUN_MAIN") == "true" or os.environ.get("FLASK_ENV") == "production":
+    price_service = PriceService()
+    price_service.start()
+else:
+    print("INFO: Main process started. Waiting for reloader worker to spawn PriceService...")
 
 @app.route("/", methods=["GET"])
 def root():
-    return jsonify({"status": "alive"})
+    return jsonify({"status": "alive", "msg": "Garry says hello"})
 
 @app.route("/equities/quotes", methods=["GET"])
 def get_equity_quotes():
-    """
-    GET /equities/quotes?symbols=AAPL&symbols=MSFT&symbols=GOOGL
-    Returns JSON for all requested symbols.
-    """
-    # Get list of symbols from query params
+    # If request hits the wrong process (rare but possible during boot), handle gracefully
+    if price_service is None:
+         return jsonify({"error": "PriceService is warming up, hold your horses"}), 503
+
     symbols = request.args.getlist("symbols")
     if not symbols:
         return jsonify({"error": "No symbols provided"}), 400
 
-    # Get optional params with defaults
-    provider = request.args.get("provider", "yfinance")
-    chunk_size = int(request.args.get("chunk_size", 50))
-
-    # Fetch the data
-    data = get_quotes_for_universe(symbols, provider=provider, chunk_size=chunk_size)
-
-    response = {
-        "provider": provider,
-        "symbols": symbols,
-        "data": data
-    }
-
-    return jsonify(response)
+    try:
+        data = price_service.get_quotes(symbols)
+        return jsonify({
+            "provider": "finnhub-ws-hybrid",
+            "symbols": symbols,
+            "data": data
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route("/equities/universe", methods=["GET"])
 def get_universe():
-    """Return the trading competition universe from universe.json with sector mappings."""
+    # ... (Keep your existing universe logic here, it was fine) ...
     try:
         base = os.path.dirname(__file__)
         path = os.path.join(base, "universe.json")
         with open(path, "r") as f:
             data = json.load(f)
-        
+            
         tickers = []
-        ticker_to_sector = {}  # NEW: Map ticker to custom sector
-        
+        ticker_to_sector = {}
         for sector_key, sector_data in data['sectors'].items():
             sector_name = sector_data['name']
             for stock in sector_data['stocks']:
                 ticker = stock['ticker']
                 tickers.append(ticker)
-                ticker_to_sector[ticker] = sector_name  # Map AAPL -> "Technology"
-        
+                ticker_to_sector[ticker] = sector_name
+
         return jsonify({
             "symbols": tickers,
             "total_stocks": data['metadata']['total_stocks'],
             "sectors": data['sectors'],
             "metadata": data['metadata'],
-            "sector_mapping": ticker_to_sector  # NEW: Include the mapping
+            "sector_mapping": ticker_to_sector
         })
-    
     except Exception as e:
         return jsonify({"error": "Could not load universe", "details": str(e)}), 500
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(debug=True, port=5000)

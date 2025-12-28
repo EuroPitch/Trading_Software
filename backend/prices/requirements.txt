@@ -8,6 +8,7 @@ cffi==2.0.0
 charset-normalizer==3.4.4
 click==8.3.1
 curl_cffi==0.13.0
+fastapi==0.120.4
 Flask==3.1.2
 flask-cors==6.0.2
 frozendict==2.4.7
@@ -36,5 +37,6 @@ typing_extensions==4.15.0
 tzdata==2025.3
 urllib3==2.6.2
 uvicorn==0.35.0
+websocket-client==1.9.0
 Werkzeug==3.1.4
 yfinance==0.2.58
