@@ -33,7 +33,7 @@ export default function StockMetrics() {
   const [sectorFilter, setSectorFilter] = useState("all");
   const [loading, setLoading] = useState(true);
 
-  const API_BASE_URL = "https://europitch-trading-prices.vercel.app";
+  const API_BASE_URL = "https://trading-software.onrender.com";
   const FETCH_CHUNK_SIZE = 50;
 
   const allColumns = [
