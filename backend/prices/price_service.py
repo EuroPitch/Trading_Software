@@ -175,14 +175,19 @@ class PriceService:
             except:
                 pass
 
-        def on_error(ws, error):
-            logger.error(f"Websocket Error: {error}")
-
         def on_close(ws, status, msg):
-            logger.warning("Websocket closed. Reconnecting...")
-            time.sleep(5)
+            logger.warning("Websocket closed. Reconnecting in 10s...")
+            time.sleep(10) # Increase from 5s to 10s
             if self.running:
                 self._websocket_loop()
+
+        def on_error(ws, error):
+            logger.error(f"Websocket Error: {error}")
+            # If it's a 429, wait longer!
+            if "429" in str(error):
+                logger.warning("Rate limited! Cooling down for 60s...")
+                time.sleep(60) 
+
 
         def on_open(ws):
             logger.info("Websocket connected.")
