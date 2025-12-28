@@ -8,5 +8,6 @@ __pycache__/
 venv/
 .DS_Store
 .env
+*.pkl
 
 TODO
