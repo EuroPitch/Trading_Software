@@ -176,28 +176,26 @@ class PriceService:
 
     def _fundamental_loop(self):
         """
-        Runs in a separate thread. Fetches Yahoo Finance data every 15 mins.
+        Runs in a separate thread. Fetches Yahoo Finance data every 1 hour.
         """
         while self.running:
             logger.info("Fetching atomic fundamentals (Yahoo)...")
-            
             if not self.symbols:
                 time.sleep(10)
                 continue
 
             try:
                 # 1. Fetch History for RSI (Lightweight)
-                # We disable threads here to avoid Yahoo 429 errors
                 history_data = yf.download(
                     self.symbols,
-                    period="1mo", # Need enough for 14-day RSI
+                    period="1mo",
                     interval="1d",
                     group_by='ticker',
-                    threads=False, 
+                    threads=False,
                     progress=False,
                     auto_adjust=True
                 )
-                
+
                 for sym in self.symbols:
                     try:
                         # Extract History
@@ -205,43 +203,124 @@ class PriceService:
                             sym_hist = history_data[sym] if sym in history_data else pd.DataFrame()
                         else:
                             sym_hist = history_data
-                        
-                        # Extract Ticker Info (Heavy Request)
-                        # We use fast_info where possible to be quick
-                        ticker = yf.Ticker(sym)
-                        info = {}
-                        try:
-                            # Try to get essential data
-                            info = ticker.fast_info
-                            market_cap = info.market_cap
-                            prev_close = info.previous_close
-                            # For PE, we sadly need the full .info which is slow, so we skip if fragile
-                            # or use a fallback. For now, let's try safely.
-                            pe_ratio = getattr(ticker.info, 'trailingPE', None) 
-                        except:
-                            market_cap = None
-                            prev_close = None
-                            pe_ratio = None
 
-                        # Store in Cache
+                        # Get ticker object
+                        ticker = yf.Ticker(sym)
+                        
+                        # ✅ Get ALL the metrics we need
+                        try:
+                            # Fast info (lightweight)
+                            fast_info = ticker.fast_info
+                            market_cap = fast_info.market_cap if hasattr(fast_info, 'market_cap') else None
+                            prev_close = fast_info.previous_close if hasattr(fast_info, 'previous_close') else None
+                            
+                            # Full info (slower but has more data)
+                            info = ticker.info
+                            
+                            # Financial metrics
+                            pe_ratio = info.get('trailingPE')
+                            pb_ratio = info.get('priceToBook')
+                            peg_ratio = info.get('pegRatio')
+                            dividend_yield = info.get('dividendYield')
+                            
+                            # Profitability metrics
+                            roe = info.get('returnOnEquity')
+                            roa = info.get('returnOnAssets')
+                            
+                            # Debt metrics
+                            debt_to_equity = info.get('debtToEquity')
+                            current_ratio = info.get('currentRatio')
+                            quick_ratio = info.get('quickRatio')
+                            
+                            # Margins
+                            gross_margin = info.get('grossMargins')
+                            operating_margin = info.get('operatingMargins')
+                            profit_margin = info.get('profitMargins')
+                            
+                            # Growth metrics
+                            revenue_growth = info.get('revenueGrowth')
+                            earnings_growth = info.get('earningsGrowth')
+                            
+                            # Volume and volatility
+                            volume = info.get('volume')
+                            avg_volume = info.get('averageVolume')
+                            beta = info.get('beta')
+                            
+                            # 52-week range
+                            week_52_high = info.get('fiftyTwoWeekHigh')
+                            week_52_low = info.get('fiftyTwoWeekLow')
+                            
+                        except Exception as e:
+                            logger.warning(f"Failed to get metrics for {sym}: {e}")
+                            # Set defaults
+                            market_cap = prev_close = pe_ratio = pb_ratio = peg_ratio = None
+                            dividend_yield = roe = roa = debt_to_equity = current_ratio = None
+                            quick_ratio = gross_margin = operating_margin = profit_margin = None
+                            revenue_growth = earnings_growth = volume = avg_volume = beta = None
+                            week_52_high = week_52_low = None
+
+                        # Pre-calculate RSI
+                        rsi_val = self.calculate_rsi(sym_hist, prev_close)
+
+                        # ✅ Store ALL metrics in cache
                         self.fundamental_cache[sym] = {
                             'history': sym_hist,
                             'constants': {
+                                # Basic info
                                 "market_cap": market_cap,
-                                "pe_ratio": pe_ratio,
                                 "prev_close": prev_close,
-                                "sector": "Unknown" # You might want to parse this from universe.json
+                                "sector": "Unknown",  # Load from universe.json if needed
+                                
+                                # Valuation metrics
+                                "pe_ratio": pe_ratio,
+                                "pb_ratio": pb_ratio,
+                                "peg_ratio": peg_ratio,
+                                "dividend_yield": dividend_yield,
+                                
+                                # Profitability
+                                "roe": roe,
+                                "roa": roa,
+                                
+                                # Financial health
+                                "debt_to_equity": debt_to_equity,
+                                "current_ratio": current_ratio,
+                                "quick_ratio": quick_ratio,
+                                
+                                # Margins
+                                "gross_margin": gross_margin,
+                                "operating_margin": operating_margin,
+                                "profit_margin": profit_margin,
+                                
+                                # Growth
+                                "revenue_growth": revenue_growth,
+                                "earnings_growth": earnings_growth,
+                                
+                                # Volume and volatility
+                                "volume": volume,
+                                "avg_volume": avg_volume,
+                                "beta": beta,
+                                
+                                # Price range
+                                "52_week_high": week_52_high,
+                                "52_week_low": week_52_low,
+                                
+                                # Technical indicators
+                                "rsi": round(rsi_val, 2) if rsi_val else None,
                             }
                         }
+                        
+                        # Rate limiting
+                        time.sleep(0.5)
+                        
                     except Exception as e:
                         logger.error(f"Failed to process {sym}: {e}")
 
                 self._save_cache()
                 logger.info("Fundamentals updated successfully.")
-                
-                # Sleep for 15 minutes to respect rate limits
-                time.sleep(900)
-                
+
+                # Sleep for 1 hour
+                time.sleep(3600)
+
             except Exception as e:
                 logger.error(f"Global fetch failed: {e}")
                 time.sleep(60)
@@ -276,17 +355,13 @@ class PriceService:
         for sym in requested_symbols:
             cache = self.fundamental_cache.get(sym, {})
             constants = cache.get('constants', {})
-            history = cache.get('history', pd.DataFrame())
-            
+
             # 1. Price Source: Live -> Cache -> 0
             price = self.live_prices.get(sym)
             if not price:
                 price = constants.get('prev_close', 0.0)
-            
-            # 2. Calculate Metrics
-            rsi_val = self.calculate_rsi(history, price)
-            
-            # 3. Calculate Change
+
+            # 2. Calculate Change
             prev_close = constants.get('prev_close', 0.0)
             change = 0.0
             change_p = 0.0
@@ -294,15 +369,52 @@ class PriceService:
                 change = price - prev_close
                 change_p = (change / prev_close) * 100
 
+            # ✅ Return ALL metrics
             response[sym] = {
+                # Basic info
                 "symbol": sym,
-                "name": sym, # Map to full name if you have it in universe.json
+                "name": sym,
                 "price": price,
                 "change": round(change, 2),
                 "change_percent": round(change_p, 2),
+                "sector": constants.get("sector", "Unknown"),
+                
+                # Valuation metrics
                 "market_cap": constants.get("market_cap"),
                 "pe_ratio": constants.get("pe_ratio"),
-                "rsi": round(rsi_val, 2) if rsi_val else None,
-                "sector": constants.get("sector", "Tech") # Defaulting for now
+                "price_to_book": constants.get("pb_ratio"),
+                "peg_ratio": constants.get("peg_ratio"),
+                "dividend_yield": constants.get("dividend_yield"),
+                
+                # Profitability
+                "roe": constants.get("roe"),
+                "roa": constants.get("roa"),
+                
+                # Financial health
+                "debt_to_equity": constants.get("debt_to_equity"),
+                "current_ratio": constants.get("current_ratio"),
+                "quick_ratio": constants.get("quick_ratio"),
+                
+                # Margins
+                "gross_margin": constants.get("gross_margin"),
+                "operating_margin": constants.get("operating_margin"),
+                "profit_margin": constants.get("profit_margin"),
+                
+                # Growth
+                "revenue_growth": constants.get("revenue_growth"),
+                "earnings_growth": constants.get("earnings_growth"),
+                
+                # Volume and volatility
+                "volume": constants.get("volume"),
+                "avg_volume": constants.get("avg_volume"),
+                "beta": constants.get("beta"),
+                
+                # Price range
+                "52_week_high": constants.get("52_week_high"),
+                "52_week_low": constants.get("52_week_low"),
+                
+                # Technical indicators
+                "rsi": constants.get("rsi"),
             }
+
         return response

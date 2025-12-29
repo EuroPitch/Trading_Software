@@ -126,7 +126,7 @@ export default function Dashboard() {
       console.log(`🔄 Fetching prices for: ${symbols.join(", ")}`);
 
       const priceResponse = await fetch(
-        `http://127.0.0.1:5000/equities/quotes?${symbolParams}&chunk_size=50`,
+        `https://trading-software.onrender.com/equities/quotes?${symbolParams}&chunk_size=50`, // Use https://trading-software.onrender.com when committing
         {
           signal: AbortSignal.timeout(10000)
         }

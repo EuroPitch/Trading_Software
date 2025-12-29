@@ -8,6 +8,7 @@ export default function StockMetrics() {
   const [stocks, setStocks] = useState([]);
   const [tickers, setTickers] = useState<string[]>([]);
   const [sectorMapping, setSectorMapping] = useState<Record<string, string>>({});
+  const [nameMapping, setNameMapping] = useState<Record<string, string>>({}); // ✅ NEW: Stock name mapping
   const [tickersLoadError, setTickersLoadError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [sortConfig, setSortConfig] = useState({
@@ -21,8 +22,6 @@ export default function StockMetrics() {
     "symbol",
     "name",
     "price",
-    "change",
-    "changePercent",
     "marketCap",
     "peRatio",
     "volume",
@@ -32,8 +31,13 @@ export default function StockMetrics() {
   const [showColumnCustomizer, setShowColumnCustomizer] = useState(false);
   const [sectorFilter, setSectorFilter] = useState("all");
   const [loading, setLoading] = useState(true);
+  const [marketStatus, setMarketStatus] = useState<{
+    isOpen: boolean;
+    status: string;
+    nextChange: string;
+  }>({ isOpen: false, status: "Closed", nextChange: "" });
 
-  const API_BASE_URL = "http://127.0.0.1:5000";
+  const API_BASE_URL = "https://trading-software.onrender.com"; // Use https://trading-software.onrender.com when committing
   const FETCH_CHUNK_SIZE = 50;
 
   const allColumns = [
@@ -62,7 +66,117 @@ export default function StockMetrics() {
     { key: "beta", label: "Beta", format: "decimal" },
   ];
 
-  // Load tickers from API with sector mapping
+  // ✅ Calculate time remaining using PROPER timezone handling
+  const formatTimeRemaining = (targetTimeEST: Date): string => {
+    const nowEST = new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" }));
+    const diffMs = targetTimeEST.getTime() - nowEST.getTime();
+    
+    if (diffMs <= 0) return "now";
+    
+    const hours = Math.floor(diffMs / (1000 * 60 * 60));
+    const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+    
+    if (hours > 24) {
+      const days = Math.floor(hours / 24);
+      const remainingHours = hours % 24;
+      return `${days}d ${remainingHours}h`;
+    } else if (hours > 0) {
+      return `${hours}h ${minutes}m`;
+    } else {
+      return `${minutes}m`;
+    }
+  };
+
+  // ✅ Check market status using ONLY EST timezone
+  const checkMarketStatus = () => {
+    const nowEST = new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" }));
+    const day = nowEST.getDay();
+    const hours = nowEST.getHours();
+    const minutes = nowEST.getMinutes();
+    const timeInMinutes = hours * 60 + minutes;
+
+    if (day === 0 || day === 6) {
+      const nextMonday = new Date(nowEST);
+      const daysUntilMonday = day === 0 ? 1 : 2;
+      nextMonday.setDate(nowEST.getDate() + daysUntilMonday);
+      nextMonday.setHours(9, 30, 0, 0);
+      
+      return {
+        isOpen: false,
+        status: "Closed (Weekend)",
+        nextChange: `Opens in ${formatTimeRemaining(nextMonday)}`
+      };
+    }
+
+    const marketOpen = 9 * 60 + 30;
+    const marketClose = 16 * 60;
+    const preMarketStart = 4 * 60;
+    const afterHoursEnd = 20 * 60;
+
+    if (timeInMinutes >= marketOpen && timeInMinutes < marketClose) {
+      const closingTime = new Date(nowEST);
+      closingTime.setHours(16, 0, 0, 0);
+      
+      return {
+        isOpen: true,
+        status: "Market Open",
+        nextChange: `Closes in ${formatTimeRemaining(closingTime)}`
+      };
+    } else if (timeInMinutes >= preMarketStart && timeInMinutes < marketOpen) {
+      const openingTime = new Date(nowEST);
+      openingTime.setHours(9, 30, 0, 0);
+      
+      return {
+        isOpen: false,
+        status: "Pre-Market",
+        nextChange: `Opens in ${formatTimeRemaining(openingTime)}`
+      };
+    } else if (timeInMinutes >= marketClose && timeInMinutes < afterHoursEnd) {
+      const nextOpen = new Date(nowEST);
+      if (day === 5) {
+        nextOpen.setDate(nowEST.getDate() + 3);
+      } else {
+        nextOpen.setDate(nowEST.getDate() + 1);
+      }
+      nextOpen.setHours(9, 30, 0, 0);
+      
+      return {
+        isOpen: false,
+        status: "After Hours",
+        nextChange: `Opens in ${formatTimeRemaining(nextOpen)}`
+      };
+    } else {
+      const nextOpen = new Date(nowEST);
+      if (timeInMinutes >= afterHoursEnd) {
+        if (day === 5) {
+          nextOpen.setDate(nowEST.getDate() + 3);
+        } else {
+          nextOpen.setDate(nowEST.getDate() + 1);
+        }
+      }
+      nextOpen.setHours(9, 30, 0, 0);
+      
+      return {
+        isOpen: false,
+        status: "Closed",
+        nextChange: `Opens in ${formatTimeRemaining(nextOpen)}`
+      };
+    }
+  };
+
+  // Update market status every minute
+  useEffect(() => {
+    const updateMarketStatus = () => {
+      setMarketStatus(checkMarketStatus());
+    };
+
+    updateMarketStatus();
+    const interval = setInterval(updateMarketStatus, 60000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  // ✅ Load tickers from API - USING EXACT NAMES FROM UNIVERSE.JSON
   useEffect(() => {
     let mounted = true;
 
@@ -78,17 +192,27 @@ export default function StockMetrics() {
         const json = await res.json();
         console.log("📦 Universe response:", json);
         
-        // ✅ FIX: Parse the sectors object to extract symbols
         const symbols: string[] = [];
-        const mapping: Record<string, string> = {};
+        const sectorMap: Record<string, string> = {};
+        const nameMap: Record<string, string> = {}; // ✅ NEW
         
-        if (json.sectors) {
-          Object.entries(json.sectors).forEach(([sectorName, sectorData]: [string, any]) => {
-            if (sectorData.stocks && Array.isArray(sectorData.stocks)) {
+        if (json && json.sectors && typeof json.sectors === 'object') {
+          Object.entries(json.sectors).forEach(([sectorKey, sectorData]: [string, any]) => {
+            if (sectorData && sectorData.stocks && Array.isArray(sectorData.stocks)) {
+              // ✅ Use the 'name' field from sector data - EXACT from universe.json
+              const sectorDisplayName = sectorData.name || sectorKey;
+              
               sectorData.stocks.forEach((stock: any) => {
-                if (stock.ticker) {
+                if (stock && stock.ticker) {
                   symbols.push(stock.ticker);
-                  mapping[stock.ticker] = sectorName;
+                  
+                  // ✅ Store EXACT sector name from universe.json
+                  sectorMap[stock.ticker] = sectorDisplayName;
+                  
+                  // ✅ Store EXACT stock name from universe.json
+                  if (stock.name) {
+                    nameMap[stock.ticker] = stock.name;
+                  }
                 }
               });
             }
@@ -96,15 +220,17 @@ export default function StockMetrics() {
         }
         
         console.log("✅ Parsed symbols:", symbols.length, symbols);
-        console.log("✅ Parsed sector mapping:", mapping);
+        console.log("✅ Parsed sector mapping:", sectorMap);
+        console.log("✅ Parsed name mapping:", nameMap);
 
         if (mounted) {
           if (symbols.length === 0) {
             setTickersLoadError("Ticker list is empty from API.");
           } else {
             setTickers(symbols);
-            setSectorMapping(mapping);
-            console.log(`✅ Loaded ${symbols.length} tickers from API with sector mapping`);
+            setSectorMapping(sectorMap);
+            setNameMapping(nameMap); // ✅ NEW
+            console.log(`✅ Loaded ${symbols.length} tickers from API`);
           }
         }
       } catch (err: any) {
@@ -120,135 +246,98 @@ export default function StockMetrics() {
     };
   }, []);
 
-  // Fetch prices/fundamentals in batches whenever the tickers list is set
+  // Fetch prices/fundamentals in batches
   useEffect(() => {
-    console.log("🔍 useEffect [tickers] triggered");
-    console.log("   tickersLoadError:", tickersLoadError);
-    console.log("   tickers length:", tickers?.length);
-    
-    if (tickersLoadError) {
-      console.log("⚠️ Exiting due to tickersLoadError");
-      return;
-    }
-    if (!tickers || tickers.length === 0) {
-      console.log("⚠️ Exiting due to empty tickers");
-      return;
-    }
+    if (tickersLoadError) return;
+    if (!tickers || tickers.length === 0) return;
 
     let isFirst = true;
     let intervalId: any;
 
     const fetchStocks = async () => {
-      console.log("🚀 fetchStocks STARTED");
       try {
-        if (isFirst) {
-          console.log("🔄 Setting loading to TRUE");
-          setLoading(true);
-        }
+        if (isFirst) setLoading(true);
 
         const symbols = tickers;
-        console.log("📋 Symbols to fetch:", symbols.length);
-
-        // Batch the requests into chunks to avoid extremely long URLs
         const chunks: string[][] = [];
         for (let i = 0; i < symbols.length; i += FETCH_CHUNK_SIZE) {
           chunks.push(symbols.slice(i, i + FETCH_CHUNK_SIZE));
         }
-        console.log("📦 Created chunks:", chunks.length);
 
-        const fetchPromises = chunks.map(async (chunk, idx) => {
-          console.log(`🔄 Fetching chunk ${idx + 1}/${chunks.length}:`, chunk.length, "symbols");
+        const fetchPromises = chunks.map(async (chunk) => {
           const params = new URLSearchParams();
           chunk.forEach((sym) => params.append("symbols", sym));
           
           const res = await fetch(
             `${API_BASE_URL}/equities/quotes?${params.toString()}`
           );
-          console.log(`✅ Chunk ${idx + 1} response status:`, res.status);
-          
-          if (!res.ok) {
-            console.error(`❌ Chunk ${idx + 1} response not OK:`, res.status);
-            return [];
-          }
+          if (!res.ok) return [];
           
           const json = await res.json();
-          const dataArray = Object.values(json.data || {});
-          console.log(`📦 Chunk ${idx + 1} returned:`, dataArray.length, "stocks");
-          
-          return dataArray;
+          return Object.values(json.data || {});
         });
 
-        console.log("⏳ Waiting for all promises...");
         const chunkResults = await Promise.all(fetchPromises);
-        console.log("✅ All chunks received");
-        
         const results = chunkResults.flat();
-        console.log("📊 Flattened results:", results.length, "items");
 
-        const stocksArray = results.map((row: any, idx: number) => ({
-          id: idx + 1,
-          symbol: row.symbol || "",
-          name: row.name || row.symbol || "",
-          sector: sectorMapping[row.symbol] || row.sector || "Unknown",
-          price: row.price || 0,
-          change: row.change || 0,
-          changePercent: row.change_percent || 0,
-          marketCap: row.market_cap || 0,
-          volume: row.volume || 0,
-          peRatio: row.pe_ratio || null,
-          pbRatio: row.price_to_book || null,
-          pegRatio: row.peg_ratio || null,
-          dividendYield: row.dividend_yield || null,
-          roe: row.roe || null,
-          roa: row.roa || null,
-          debtToEquity: row.debt_to_equity || null,
-          currentRatio: row.current_ratio || null,
-          quickRatio: row.quick_ratio || null,
-          grossMargin: row.operating_margin || null,
-          operatingMargin: row.operating_margin || null,
-          netMargin: null,
-          revenueGrowth: row.revenue_growth || null,
-          earningsGrowth: null,
-          rsi: row.rsi || null,
-          beta: row.beta || null,
-          fiftyTwoWeekHigh: row["52_week_high"] || null,
-          fiftyTwoWeekLow: row["52_week_low"] || null,
-          avgVolume: row.avg_volume || null,
-        }));
+        // ✅ Use nameMapping and sectorMapping from universe.json
+        const stocksArray = results.map((row: any, idx: number) => {
+          const symbol = row.symbol || "";
+          const sector = sectorMapping[symbol] || "Unknown";
+          const name = nameMapping[symbol] || symbol; // ✅ Use EXACT name from universe.json
+          
+          return {
+            id: idx + 1,
+            symbol: symbol,
+            name: name, // ✅ EXACT name from universe.json
+            sector: sector, // ✅ EXACT sector name from universe.json
+            price: row.price || 0,
+            change: row.change || 0,
+            changePercent: row.change_percent || 0,
+            marketCap: row.market_cap || 0,
+            volume: row.volume || 0,
+            peRatio: row.pe_ratio || null,
+            pbRatio: row.price_to_book || null,
+            pegRatio: row.peg_ratio || null,
+            dividendYield: row.dividend_yield || null,
+            roe: row.roe || null,
+            roa: row.roa || null,
+            debtToEquity: row.debt_to_equity || null,
+            currentRatio: row.current_ratio || null,
+            quickRatio: row.quick_ratio || null,
+            grossMargin: row.gross_margin || null,
+            operatingMargin: row.operating_margin || null,
+            netMargin: row.profit_margin || null,
+            revenueGrowth: row.revenue_growth || null,
+            earningsGrowth: row.earnings_growth || null,
+            rsi: row.rsi || null,
+            beta: row.beta || null,
+            fiftyTwoWeekHigh: row["52_week_high"] || null,
+            fiftyTwoWeekLow: row["52_week_low"] || null,
+            avgVolume: row.avg_volume || null,
+          };
+        });
 
-        console.log("🎯 Mapped stocksArray:", stocksArray.length, "stocks");
-        if (stocksArray.length > 0) {
-          console.log("🎯 First stock:", stocksArray[0]);
-        }
-        
-        console.log("💾 Calling setStocks...");
         setStocks(stocksArray);
-        console.log("✅ setStocks called!");
         
       } catch (err) {
         console.error("💥 ERROR in fetchStocks:", err);
       } finally {
-        console.log("🏁 FINALLY block - setting loading to FALSE");
         if (isFirst) {
           setLoading(false);
           isFirst = false;
         }
       }
-      console.log("🏁 fetchStocks COMPLETED");
     };
 
-    // Initial load
     fetchStocks();
-    
-    // Background refresh every 30 seconds
     intervalId = setInterval(fetchStocks, 30000);
 
     return () => {
       clearInterval(intervalId);
     };
-  }, [tickers, tickersLoadError, sectorMapping]);
+  }, [tickers, tickersLoadError, sectorMapping, nameMapping]); // ✅ Added nameMapping dependency
 
-  // Track collapsed state for each sector
   const [collapsedSectors, setCollapsedSectors] = useState<Record<string, boolean>>({});
 
   const toggleSectorCollapse = (sector: string) => {
@@ -281,7 +370,6 @@ export default function StockMetrics() {
     return filtered;
   }, [stocks, searchTerm, sectorFilter, sortConfig]);
 
-  // Group filtered stocks by sector for display
   const groupedBySector = useMemo(() => {
     const groups: Record<string, any[]> = {};
     filteredAndSortedStocks.forEach((s) => {
@@ -407,7 +495,30 @@ export default function StockMetrics() {
     <div className="metrics-container">
       <div className="metrics-header">
         <div className="header-top">
-          <h1>Market Metrics & Analysis</h1>
+          <div>
+            <h1>Market Metrics & Analysis</h1>
+            <div style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: '8px', 
+              marginTop: '8px',
+              fontSize: '14px'
+            }}>
+              <span style={{
+                display: 'inline-block',
+                width: '10px',
+                height: '10px',
+                borderRadius: '50%',
+                backgroundColor: marketStatus.isOpen ? '#10b981' : '#ef4444'
+              }}></span>
+              <span style={{ fontWeight: '600' }}>
+                {marketStatus.status}
+              </span>
+              <span style={{ color: '#6b7280' }}>
+                · {marketStatus.nextChange}
+              </span>
+            </div>
+          </div>
           <div className="header-actions">
             <button
               className={`btn-compare ${compareMode ? "active" : ""}`}
