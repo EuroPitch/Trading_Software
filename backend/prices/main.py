@@ -1,74 +1,99 @@
-from flask import Flask, request, jsonify
-from flask_cors import CORS
-from dotenv import load_dotenv
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query
+from fastapi.middleware.cors import CORSMiddleware
+from typing import List, Optional
+import logging
 import os
-import json
+from dotenv import load_dotenv
 
-# Load env variables first
+# Load env variables
 load_dotenv()
 
-from price_service import PriceService 
+# Import Service
+from price_service import PriceService
+# Import Universe Utils for the universe endpoint
+from universe_utils import load_universe
 
-app = Flask(__name__)
-CORS(app)
+# Setup Logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("MainApp")
 
-# --- THE FIX: START IT UNCONDITIONALLY ---
-print("INFO: Starting PriceService...")
-price_service = PriceService()
-price_service.start()
-# -----------------------------------------
+app = FastAPI()
 
-@app.route("/", methods=["GET"])
-def root():
-    return jsonify({"status": "alive", "msg": "Garry says hello"})
+# CORS Setup - Essential for React
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"], 
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-@app.route("/equities/quotes", methods=["GET"])
-def get_equity_quotes():
+# Global Service Instance
+# We initialize it here so it persists across requests
+service = PriceService()
+
+@app.on_event("startup")
+async def startup_event():
     """
-    GET /equities/quotes?symbols=AAPL&symbols=MSFT
+    Kickstarts the background threads when the server starts.
     """
-    # Removed the 'if None' check because it's impossible now
-    
-    symbols = request.args.getlist("symbols")
-    if not symbols:
-        return jsonify({"error": "No symbols provided"}), 400
+    logger.info("Booting up the EuroPitch Price Engine...")
+    await service.start()
 
-    try:
-        data = price_service.get_quotes(symbols)
-        return jsonify({
-            "provider": "finnhub-ws-hybrid",
-            "symbols": symbols,
-            "data": data
-        })
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+@app.get("/")
+def home():
+    return {
+        "status": "online", 
+        "service": "EuroPitch Price API", 
+        "msg": "Send it."
+    }
 
-@app.route("/equities/universe", methods=["GET"])
+@app.get("/equities/universe")
 def get_universe():
+    """
+    Returns the full universe structure from universe.json
+    """
     try:
-        base = os.path.dirname(__file__)
-        path = os.path.join(base, "universe.json")
-        with open(path, "r") as f:
-            data = json.load(f)
-            
-        tickers = []
-        ticker_to_sector = {}
-        for sector_key, sector_data in data['sectors'].items():
-            sector_name = sector_data['name']
-            for stock in sector_data['stocks']:
-                ticker = stock['ticker']
-                tickers.append(ticker)
-                ticker_to_sector[ticker] = sector_name
-
-        return jsonify({
-            "symbols": tickers,
-            "total_stocks": data['metadata']['total_stocks'],
-            "sectors": data['sectors'],
-            "metadata": data['metadata'],
-            "sector_mapping": ticker_to_sector
-        })
+        data = load_universe()
+        return data
     except Exception as e:
-        return jsonify({"error": "Could not load universe", "details": str(e)}), 500
+        return {"error": f"Failed to load universe: {str(e)}"}
 
+@app.get("/equities/quotes")
+def get_quotes(symbols: List[str] = Query(None)):
+    """
+    REST Endpoint for initial page load.
+    Example: /equities/quotes?symbols=AAPL&symbols=MSFT
+    """
+    if not symbols:
+        # If no symbols provided, return all known symbols
+        symbols = service.symbols
+        
+    data = service.get_snapshot(symbols)
+    return {"data": data}
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    """
+    WebSocket Endpoint.
+    React connects here: ws://localhost:8000/ws
+    """
+    await service.manager.connect(websocket)
+    try:
+        while True:
+            # Keep the connection alive and listen for any client messages
+            # (e.g. heartbeat or subscription requests)
+            data = await websocket.receive_text()
+            # Logic to handle client messages if needed
+            if data == "ping":
+                await websocket.send_text("pong")
+    except WebSocketDisconnect:
+        service.manager.disconnect(websocket)
+    except Exception as e:
+        logger.error(f"WebSocket error: {e}")
+        service.manager.disconnect(websocket)
+
+# Entry point for debugging
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=5000) # Run command = uvicorn main:app --reload --port 5000

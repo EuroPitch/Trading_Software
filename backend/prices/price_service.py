@@ -1,20 +1,52 @@
-import websocket
+import asyncio
 import json
+import logging
+import os
 import threading
 import time
-import os
+import pickle
 import requests
 import yfinance as yf
 import pandas as pd
-import logging
-import pickle
+import websockets
+from fastapi import WebSocket
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("PriceService")
 
-# Cache file path
 CACHE_FILE = "fundamentals_cache.pkl"
+
+class ConnectionManager:
+    """
+    Manages the websocket connections to your frontend clients (React).
+    """
+    def __init__(self):
+        self.active_connections: list[WebSocket] = []
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+        logger.info(f"New client connected. Total: {len(self.active_connections)}")
+
+    def disconnect(self, websocket: WebSocket):
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
+            logger.info(f"Client disconnected. Total: {len(self.active_connections)}")
+
+    async def broadcast(self, message: dict):
+        """
+        Broadcasts a JSON message to all connected clients.
+        Removes dead connections automatically.
+        """
+        json_msg = json.dumps(message)
+        # Iterate over a copy to avoid modification issues during iteration
+        for connection in self.active_connections[:]:
+            try:
+                await connection.send_text(json_msg)
+            except Exception as e:
+                logger.error(f"Failed to send to client: {e}")
+                self.disconnect(connection)
 
 class PriceService:
     def __init__(self, universe_file="universe.json"):
@@ -27,22 +59,27 @@ class PriceService:
         
         # Load cache from disk if it exists
         self.fundamental_cache = self._load_cache()
+        self.live_prices = {} # {symbol: price}
         
-        self.live_prices = {}
-        self.ws = None
+        # The Manager handles your frontend clients
+        self.manager = ConnectionManager()
         self.running = False
 
     def _load_symbols(self):
         try:
             base = os.path.dirname(__file__)
             path = os.path.join(base, self.universe_file)
+            if not os.path.exists(path):
+                 # Fallback if file not found (e.g. running from different dir)
+                 return []
+                 
             with open(path, "r") as f:
                 data = json.load(f)
-                tickers = []
-                for sector in data['sectors'].values():
-                    for stock in sector['stocks']:
-                        tickers.append(stock['ticker'])
-                return list(set(tickers))
+            tickers = []
+            for sector in data['sectors'].values():
+                for stock in sector['stocks']:
+                    tickers.append(stock['ticker'])
+            return list(set(tickers))
         except Exception as e:
             logger.error(f"Failed to load universe: {e}")
             return []
@@ -64,214 +101,208 @@ class PriceService:
         except Exception as e:
             logger.error(f"Failed to save cache: {e}")
 
-    def start(self):
+    async def start(self):
+        """Starts the async loop for Finnhub and the threaded loop for Yahoo."""
         self.running = True
-        # Thread 1: Fundamentals (Sequential, gentle)
+        
+        # 1. Start Fundamentals in a background thread (Blocking IO)
         t_fund = threading.Thread(target=self._fundamental_loop, daemon=True)
         t_fund.start()
+
+        # 2. Start the Async Websocket Consumer (Non-blocking)
+        asyncio.create_task(self._upstream_websocket_loop())
+
+    async def _upstream_websocket_loop(self):
+        """Connects to Finnhub and pushes data to the Manager."""
+        uri = f"wss://ws.finnhub.io?token={self.api_key}"
         
-        # Thread 2: Websockets
-        t_ws = threading.Thread(target=self._websocket_loop, daemon=True)
-        t_ws.start()
+        while self.running:
+            try:
+                logger.info("Connecting to Finnhub WS...")
+                async with websockets.connect(uri) as ws:
+                    logger.info("Connected to Finnhub.")
+                    
+                    # Subscribe to all symbols
+                    for sym in self.symbols:
+                        await ws.send(json.dumps({"type": "subscribe", "symbol": sym}))
+                    
+                    # Listen for messages
+                    async for message in ws:
+                        try:
+                            data = json.loads(message)
+                            if data['type'] == 'trade':
+                                # Update internal state
+                                update_batch = {}
+                                for trade in data['data']:
+                                    sym = trade['s']
+                                    price = trade['p']
+                                    self.live_prices[sym] = price
+                                    
+                                    # Calculate change % on the fly if we have yesterday's close
+                                    prev_close = self._get_prev_close(sym)
+                                    change = 0.0
+                                    change_p = 0.0
+                                    if prev_close and prev_close > 0:
+                                        change = price - prev_close
+                                        change_p = (change / prev_close) * 100
+
+                                    update_batch[sym] = {
+                                        "price": price,
+                                        "change": round(change, 2),
+                                        "change_percent": round(change_p, 2)
+                                    }
+                                
+                                # BROADCAST TO FRONTEND IMMEDIATELY
+                                if update_batch:
+                                    await self.manager.broadcast({
+                                        "type": "price_update",
+                                        "data": update_batch
+                                    })
+                        except Exception as e:
+                            logger.error(f"Error processing message: {e}")
+                            
+            except Exception as e:
+                logger.error(f"Finnhub connection dropped: {e}. Reconnecting in 5s...")
+                await asyncio.sleep(5)
+
+    def _get_prev_close(self, symbol):
+        """Helper to get previous close from cache."""
+        cache = self.fundamental_cache.get(symbol, {})
+        history = cache.get('history', pd.DataFrame())
+        if not history.empty and 'Close' in history:
+            # Return the last known close from history (yesterday)
+            return history['Close'].iloc[-1]
+        return None
 
     def _fundamental_loop(self):
+        """
+        Runs in a separate thread. Fetches Yahoo Finance data every 15 mins.
+        """
         while self.running:
-            logger.info("Fetching atomic fundamentals...")
+            logger.info("Fetching atomic fundamentals (Yahoo)...")
             
-            # 1. Create a Session to look like a browser
-            session = requests.Session()
-            session.headers.update({
-                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-            })
+            if not self.symbols:
+                time.sleep(10)
+                continue
 
             try:
-                # 2. Sequential Download (Gentler on API and RAM)
-                # We fetch 5 days just for RSI.
-                # If this fails, we catch it.
-                history = yf.download(
-                    self.symbols, 
-                    period="5d", 
-                    interval="1d", 
-                    group_by='ticker', 
-                    threads=False, # CRITICAL: Disable threads to avoid 429
+                # 1. Fetch History for RSI (Lightweight)
+                # We disable threads here to avoid Yahoo 429 errors
+                history_data = yf.download(
+                    self.symbols,
+                    period="1mo", # Need enough for 14-day RSI
+                    interval="1d",
+                    group_by='ticker',
+                    threads=False, 
                     progress=False,
                     auto_adjust=True
-                    # session=session # Not supported in all versions, rely on global requests patch if needed
                 )
                 
                 for sym in self.symbols:
                     try:
-                        # Handle DataFrame structure
+                        # Extract History
                         if len(self.symbols) > 1:
-                            sym_hist = history[sym] if sym in history else pd.DataFrame()
+                            sym_hist = history_data[sym] if sym in history_data else pd.DataFrame()
                         else:
-                            sym_hist = history
-
-                        # Fetch Ticker Info (This is the risky part that gets blocked)
-                        # We wrap it in a try-except and fallback to Finnhub if needed
+                            sym_hist = history_data
+                        
+                        # Extract Ticker Info (Heavy Request)
+                        # We use fast_info where possible to be quick
                         ticker = yf.Ticker(sym)
                         info = {}
                         try:
-                            info = ticker.fast_info # Prefer fast_info over .info
+                            # Try to get essential data
+                            info = ticker.fast_info
+                            market_cap = info.market_cap
+                            prev_close = info.previous_close
+                            # For PE, we sadly need the full .info which is slow, so we skip if fragile
+                            # or use a fallback. For now, let's try safely.
+                            pe_ratio = getattr(ticker.info, 'trailingPE', None) 
                         except:
-                            pass
-                        
-                        # --- FALLBACK: If Yahoo returns garbage, try Finnhub REST for Price ---
-                        current_price = 0.0
-                        try:
-                             # Try Yahoo first
-                            current_price = info.get('last_price', 0.0)
-                            if current_price == 0.0:
-                                # Fallback to Finnhub Quote
-                                r = requests.get(f"https://finnhub.io/api/v1/quote?symbol={sym}&token={self.api_key}")
-                                if r.status_code == 200:
-                                    q = r.json()
-                                    current_price = q.get('c', 0.0) # 'c' is current price
-                                    # Update live prices immediately
-                                    self.live_prices[sym] = current_price
-                        except:
-                            pass
+                            market_cap = None
+                            prev_close = None
+                            pe_ratio = None
 
-                        existing = self.fundamental_cache.get(sym, {})
-                        existing_constants = existing.get('constants', {})
-                        
-                        # Merge logic
-                        new_constants = {
-                            "market_cap_static": info.get('market_cap', existing_constants.get('market_cap_static')),
-                            "shares_outstanding": info.get('shares', existing_constants.get('shares_outstanding')),
-                            # Add other fields as needed, keeping existing if new fetch fails
-                            "long_name": existing_constants.get('long_name', sym),
-                            "sector": existing_constants.get('sector', "Unknown")
-                        }
-
+                        # Store in Cache
                         self.fundamental_cache[sym] = {
                             'history': sym_hist,
-                            'constants': new_constants,
-                            'raw_info': {'currentPrice': current_price} # Store price here
+                            'constants': {
+                                "market_cap": market_cap,
+                                "pe_ratio": pe_ratio,
+                                "prev_close": prev_close,
+                                "sector": "Unknown" # You might want to parse this from universe.json
+                            }
                         }
-                        
                     except Exception as e:
-                        logger.error(f"Error processing {sym}: {e}")
+                        logger.error(f"Failed to process {sym}: {e}")
 
                 self._save_cache()
                 logger.info("Fundamentals updated successfully.")
-
+                
+                # Sleep for 15 minutes to respect rate limits
+                time.sleep(900)
+                
             except Exception as e:
                 logger.error(f"Global fetch failed: {e}")
-            
-            # Sleep 15 mins
-            time.sleep(900)
-
-    def _websocket_loop(self):
-        websocket.enableTrace(False)
-        ws_url = f"wss://ws.finnhub.io?token={self.api_key}"
-        
-        def on_message(ws, message):
-            try:
-                data = json.loads(message)
-                if data['type'] == 'trade':
-                    for trade in data['data']:
-                        self.live_prices[trade['s']] = trade['p']
-            except:
-                pass
-
-        def on_close(ws, status, msg):
-            logger.warning("Websocket closed. Reconnecting in 10s...")
-            time.sleep(10) # Increase from 5s to 10s
-            if self.running:
-                self._websocket_loop()
-
-        def on_error(ws, error):
-            logger.error(f"Websocket Error: {error}")
-            # If it's a 429, wait longer!
-            if "429" in str(error):
-                logger.warning("Rate limited! Cooling down for 60s...")
-                time.sleep(60) 
-
-
-        def on_open(ws):
-            logger.info("Websocket connected.")
-            for sym in self.symbols:
-                ws.send(json.dumps({"type": "subscribe", "symbol": sym}))
-                time.sleep(0.05)
-        
-        self.ws = websocket.WebSocketApp(
-            ws_url, 
-            on_message=on_message, 
-            on_error=on_error, 
-            on_close=on_close, 
-            on_open=on_open
-        )
-        self.ws.run_forever(ping_interval=30, ping_timeout=10)
+                time.sleep(60)
 
     def calculate_rsi(self, history, current_price):
-        if history.empty: return None
+        """Calculates 14-day RSI."""
+        if history.empty or 'Close' not in history: 
+            return None
         try:
-            # Simple RSI
+            # Append current price to history for live RSI
             closes = history['Close'].tolist()
-            closes.append(current_price)
+            if current_price:
+                closes.append(current_price)
+            
             series = pd.Series(closes)
             delta = series.diff()
+            
             gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
             loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+            
             rs = gain / loss
             rsi = 100 - (100 / (1 + rs))
             return rsi.iloc[-1]
         except:
             return None
 
-    def get_quotes(self, requested_symbols):
+    def get_snapshot(self, requested_symbols):
+        """
+        Returns the full state for the initial REST load.
+        """
         response = {}
         for sym in requested_symbols:
-            cache = self.fundamental_cache.get(sym)
-            
-            # --- SAFETY FOR INITIAL LOAD ---
-            if cache is None:
-                # If we have a live price from WS/Finnhub, use it even if cache is empty
-                price = self.live_prices.get(sym, 0.0)
-                response[sym] = {
-                    "symbol": sym,
-                    "name": sym,
-                    "price": price,
-                    "change": 0.0,
-                    "change_percent": 0.0,
-                    "sector": "Loading..." if price == 0.0 else "Updating...",
-                    "market_cap": None,
-                    "pe_ratio": None,
-                    "rsi": None
-                }
-                continue
-
+            cache = self.fundamental_cache.get(sym, {})
             constants = cache.get('constants', {})
             history = cache.get('history', pd.DataFrame())
-            raw_info = cache.get('raw_info', {})
-
-            # Price Priority: Live WS -> Finnhub REST (stored in raw_info) -> 0
-            live_price = self.live_prices.get(sym)
-            if not live_price:
-                live_price = raw_info.get('currentPrice', 0.0)
             
-            # Calc RSI
-            rsi_val = None
-            if live_price and not history.empty:
-                rsi_val = self.calculate_rsi(history, live_price)
-
-            # Calc Market Cap
-            mc = constants.get('market_cap_static')
-            if live_price and constants.get('shares_outstanding'):
-                mc = live_price * constants.get('shares_outstanding')
+            # 1. Price Source: Live -> Cache -> 0
+            price = self.live_prices.get(sym)
+            if not price:
+                price = constants.get('prev_close', 0.0)
+            
+            # 2. Calculate Metrics
+            rsi_val = self.calculate_rsi(history, price)
+            
+            # 3. Calculate Change
+            prev_close = constants.get('prev_close', 0.0)
+            change = 0.0
+            change_p = 0.0
+            if prev_close and price:
+                change = price - prev_close
+                change_p = (change / prev_close) * 100
 
             response[sym] = {
                 "symbol": sym,
-                "name": constants.get("long_name", sym),
-                "sector": constants.get("sector", "Unknown"),
-                "price": live_price,
-                "change": 0.0, # You can calculate this if you store prev close
-                "change_percent": 0.0,
-                "market_cap": mc,
-                "pe_ratio": None, # Hard to get without reliable EPS
-                "rsi": rsi_val,
-                # ... add other fields as needed ...
+                "name": sym, # Map to full name if you have it in universe.json
+                "price": price,
+                "change": round(change, 2),
+                "change_percent": round(change_p, 2),
+                "market_cap": constants.get("market_cap"),
+                "pe_ratio": constants.get("pe_ratio"),
+                "rsi": round(rsi_val, 2) if rsi_val else None,
+                "sector": constants.get("sector", "Tech") # Defaulting for now
             }
-            
         return response

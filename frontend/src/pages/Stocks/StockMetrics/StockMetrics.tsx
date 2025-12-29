@@ -33,8 +33,7 @@ export default function StockMetrics() {
   const [sectorFilter, setSectorFilter] = useState("all");
   const [loading, setLoading] = useState(true);
 
-  // --- HARDCODED RENDER URL (The Fix) ---
-  const API_BASE_URL = "https://trading-software.onrender.com"; 
+  const API_BASE_URL = "http://127.0.0.1:5000";
   const FETCH_CHUNK_SIZE = 50;
 
   const allColumns = [
@@ -69,7 +68,7 @@ export default function StockMetrics() {
 
     const loadTickers = async () => {
       try {
-        console.log(`Fetching universe from: ${API_BASE_URL}/equities/universe`);
+        console.log(`🔍 Fetching universe from: ${API_BASE_URL}/equities/universe`);
         const res = await fetch(`${API_BASE_URL}/equities/universe`);
         
         if (!res.ok) {
@@ -77,8 +76,27 @@ export default function StockMetrics() {
         }
         
         const json = await res.json();
-        const symbols = json.symbols || [];
-        const mapping = json.sector_mapping || {};
+        console.log("📦 Universe response:", json);
+        
+        // ✅ FIX: Parse the sectors object to extract symbols
+        const symbols: string[] = [];
+        const mapping: Record<string, string> = {};
+        
+        if (json.sectors) {
+          Object.entries(json.sectors).forEach(([sectorName, sectorData]: [string, any]) => {
+            if (sectorData.stocks && Array.isArray(sectorData.stocks)) {
+              sectorData.stocks.forEach((stock: any) => {
+                if (stock.ticker) {
+                  symbols.push(stock.ticker);
+                  mapping[stock.ticker] = sectorName;
+                }
+              });
+            }
+          });
+        }
+        
+        console.log("✅ Parsed symbols:", symbols.length, symbols);
+        console.log("✅ Parsed sector mapping:", mapping);
 
         if (mounted) {
           if (symbols.length === 0) {
@@ -86,11 +104,11 @@ export default function StockMetrics() {
           } else {
             setTickers(symbols);
             setSectorMapping(mapping);
-            console.log(`Loaded ${symbols.length} tickers from API with sector mapping`);
+            console.log(`✅ Loaded ${symbols.length} tickers from API with sector mapping`);
           }
         }
       } catch (err: any) {
-        console.error("Error loading tickers from API", err);
+        console.error("❌ Error loading tickers from API", err);
         if (mounted) setTickersLoadError(err.message || String(err));
       }
     };
@@ -104,42 +122,68 @@ export default function StockMetrics() {
 
   // Fetch prices/fundamentals in batches whenever the tickers list is set
   useEffect(() => {
-    if (tickersLoadError) return;
-    if (!tickers || tickers.length === 0) return;
+    console.log("🔍 useEffect [tickers] triggered");
+    console.log("   tickersLoadError:", tickersLoadError);
+    console.log("   tickers length:", tickers?.length);
+    
+    if (tickersLoadError) {
+      console.log("⚠️ Exiting due to tickersLoadError");
+      return;
+    }
+    if (!tickers || tickers.length === 0) {
+      console.log("⚠️ Exiting due to empty tickers");
+      return;
+    }
 
     let isFirst = true;
     let intervalId: any;
 
     const fetchStocks = async () => {
+      console.log("🚀 fetchStocks STARTED");
       try {
-        if (isFirst) setLoading(true);
+        if (isFirst) {
+          console.log("🔄 Setting loading to TRUE");
+          setLoading(true);
+        }
 
         const symbols = tickers;
+        console.log("📋 Symbols to fetch:", symbols.length);
 
         // Batch the requests into chunks to avoid extremely long URLs
         const chunks: string[][] = [];
         for (let i = 0; i < symbols.length; i += FETCH_CHUNK_SIZE) {
           chunks.push(symbols.slice(i, i + FETCH_CHUNK_SIZE));
         }
+        console.log("📦 Created chunks:", chunks.length);
 
-        const results: any[] = [];
-
-        for (const chunk of chunks) {
+        const fetchPromises = chunks.map(async (chunk, idx) => {
+          console.log(`🔄 Fetching chunk ${idx + 1}/${chunks.length}:`, chunk.length, "symbols");
           const params = new URLSearchParams();
           chunk.forEach((sym) => params.append("symbols", sym));
-          // params.append("chunk_size", String(FETCH_CHUNK_SIZE)); // Backend ignores this anyway, but kept for clarity
-
+          
           const res = await fetch(
             `${API_BASE_URL}/equities/quotes?${params.toString()}`
           );
+          console.log(`✅ Chunk ${idx + 1} response status:`, res.status);
+          
           if (!res.ok) {
-            console.warn("Chunk fetch failed", res.status);
-            continue;
+            console.error(`❌ Chunk ${idx + 1} response not OK:`, res.status);
+            return [];
           }
+          
           const json = await res.json();
-          const data = Object.values(json.data || {});
-          results.push(...data);
-        }
+          const dataArray = Object.values(json.data || {});
+          console.log(`📦 Chunk ${idx + 1} returned:`, dataArray.length, "stocks");
+          
+          return dataArray;
+        });
+
+        console.log("⏳ Waiting for all promises...");
+        const chunkResults = await Promise.all(fetchPromises);
+        console.log("✅ All chunks received");
+        
+        const results = chunkResults.flat();
+        console.log("📊 Flattened results:", results.length, "items");
 
         const stocksArray = results.map((row: any, idx: number) => ({
           id: idx + 1,
@@ -152,17 +196,17 @@ export default function StockMetrics() {
           marketCap: row.market_cap || 0,
           volume: row.volume || 0,
           peRatio: row.pe_ratio || null,
-          pbRatio: row.price_to_book || null, // Map price_to_book to pbRatio
+          pbRatio: row.price_to_book || null,
           pegRatio: row.peg_ratio || null,
-          dividendYield: row.dividend_yield ? row.dividend_yield : null, // Assuming backend sends percentage or decimal, careful here
+          dividendYield: row.dividend_yield || null,
           roe: row.roe || null,
           roa: row.roa || null,
           debtToEquity: row.debt_to_equity || null,
           currentRatio: row.current_ratio || null,
-          quickRatio: row.quick_ratio || null, // Map quick_ratio
-          grossMargin: row.operating_margin || null, // Using operating margin as proxy if gross missing
+          quickRatio: row.quick_ratio || null,
+          grossMargin: row.operating_margin || null,
           operatingMargin: row.operating_margin || null,
-          netMargin: null, // Backend might not send this yet
+          netMargin: null,
           revenueGrowth: row.revenue_growth || null,
           earningsGrowth: null,
           rsi: row.rsi || null,
@@ -172,31 +216,40 @@ export default function StockMetrics() {
           avgVolume: row.avg_volume || null,
         }));
 
+        console.log("🎯 Mapped stocksArray:", stocksArray.length, "stocks");
+        if (stocksArray.length > 0) {
+          console.log("🎯 First stock:", stocksArray[0]);
+        }
+        
+        console.log("💾 Calling setStocks...");
         setStocks(stocksArray);
+        console.log("✅ setStocks called!");
+        
       } catch (err) {
-        console.error("Failed to load market data", err);
+        console.error("💥 ERROR in fetchStocks:", err);
       } finally {
+        console.log("🏁 FINALLY block - setting loading to FALSE");
         if (isFirst) {
           setLoading(false);
           isFirst = false;
         }
       }
+      console.log("🏁 fetchStocks COMPLETED");
     };
 
     // Initial load
     fetchStocks();
-    // Background refresh every 10 seconds
-    intervalId = setInterval(fetchStocks, 10000);
+    
+    // Background refresh every 30 seconds
+    intervalId = setInterval(fetchStocks, 30000);
 
     return () => {
       clearInterval(intervalId);
     };
-  }, [tickers, tickersLoadError]);
+  }, [tickers, tickersLoadError, sectorMapping]);
 
   // Track collapsed state for each sector
-  const [collapsedSectors, setCollapsedSectors] = useState<
-    Record<string, boolean>
-  >({});
+  const [collapsedSectors, setCollapsedSectors] = useState<Record<string, boolean>>({});
 
   const toggleSectorCollapse = (sector: string) => {
     setCollapsedSectors((prev) => ({ ...prev, [sector]: !prev[sector] }));
@@ -276,7 +329,6 @@ export default function StockMetrics() {
         return value.toLocaleString();
 
       case "percent":
-        // Adjust if backend sends 0.05 instead of 5
         return `${(value * 1).toFixed(2)}%`;
 
       case "decimal":
