@@ -407,3 +407,59 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* Error Boundary Styles */
+.error-boundary {
+  padding: 40px;
+  text-align: center;
+  background: var(--panel);
+  border-radius: 8px;
+  margin: 40px auto;
+  max-width: 600px;
+}
+
+.error-boundary h2 {
+  color: var(--text);
+  margin-bottom: 16px;
+}
+
+.error-boundary p {
+  color: var(--muted);
+  margin-bottom: 24px;
+}
+
+/* WebSocket Status Indicator */
+.ws-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.ws-status.connected {
+  color: #059669;
+}
+
+.ws-status.disconnected {
+  color: #dc2626;
+}
+
+.ws-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.ws-status.connected .ws-status-dot {
+  background: #059669;
+}
+
+.ws-status.disconnected .ws-status-dot {
+  background: #dc2626;
+}
+
+.ws-error-text {
+  font-size: 11px;
+  color: #6b7280;
+}

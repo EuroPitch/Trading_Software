@@ -1,10 +1,98 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import StockDetailModal from "../StockDetailModal/StockDetailModal";
 import ComparisonPanel from "../ComparisonPanel/ComparisonPanel";
 import StockOrderModal from "../StockOrderModal/StockOrderModal";
 import "./StockMetrics.css";
 
-export default function StockMetrics() {
+
+// ============================================
+// TypeScript Interfaces
+// ============================================
+interface Stock {
+  id: string;
+  symbol: string;
+  name: string;
+  sector: string;
+  price: number;
+  change: number;
+  changePercent: number;
+  marketCap: number | null;
+  volume: number | null;
+  peRatio: number | null;
+  pbRatio: number | null;
+  pegRatio: number | null;
+  dividendYield: number | null;
+  roe: number | null;
+  roa: number | null;
+  debtToEquity: number | null;
+  currentRatio: number | null;
+  grossMargin: number | null;
+  operatingMargin: number | null;
+  netMargin: number | null;
+  revenueGrowth: number | null;
+  earningsGrowth: number | null;
+  rsi: number | null;
+  beta: number | null;
+}
+
+interface WebSocketMessage {
+  type: string;
+  data: Record<string, {
+    price: number;
+    change: number;
+    change_percent: number;
+  }>;
+}
+
+interface MarketStatus {
+  isOpen: boolean;
+  status: string;
+  nextChange: string;
+}
+
+interface SortConfig {
+  key: string;
+  direction: "asc" | "desc";
+}
+
+// ============================================
+// Error Boundary Component
+// ============================================
+class ErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean; error: Error | null }
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    // Add Sentry or error logging here later
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="error-boundary">
+          <h2>Something went wrong</h2>
+          <p>We're sorry, but there was an error loading the stock metrics.</p>
+          <button onClick={() => window.location.reload()} className="btn-primary">
+            Reload Page
+          </button>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
+function StockMetricsContent() {
   const [stocks, setStocks] = useState([]);
   const [tickers, setTickers] = useState<string[]>([]);
   const [sectorMapping, setSectorMapping] = useState<Record<string, string>>({});
@@ -37,8 +125,82 @@ export default function StockMetrics() {
     nextChange: string;
   }>({ isOpen: false, status: "Closed", nextChange: "" });
 
+  // WebSocket connection state
+  const [wsConnected, setWsConnected] = useState(false);
+  const [wsError, setWsError] = useState<string | null>(null);
+
+  // WebSocket refs for reconnection logic
+  const wsRef = useRef<WebSocket | null>(null);
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const reconnectAttemptsRef = useRef(0);
+  const MAX_RECONNECT_ATTEMPTS = 5;
+  const RECONNECT_DELAY = 3000;
+
+
   const API_BASE_URL = "https://trading-software.onrender.com"; // Use https://trading-software.onrender.com when committing
   const FETCH_CHUNK_SIZE = 50;
+
+  const connectWebSocket = () => {
+  try {
+    const wsUrl = API_BASE_URL.replace("http", "ws") + "/ws";
+    const ws = new WebSocket(wsUrl);
+
+    ws.onopen = () => {
+      setWsConnected(true);
+      setWsError(null);
+      reconnectAttemptsRef.current = 0;
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const message: WebSocketMessage = JSON.parse(event.data);
+        
+        if (message.type === "price_update") {
+          setStocks((prevStocks) =>
+            prevStocks.map((stock) => {
+              const update = message.data[stock.symbol];
+              if (update) {
+                return {
+                  ...stock,
+                  price: update.price,
+                  change: update.change,
+                  changePercent: update.change_percent,
+                };
+              }
+              return stock;
+            })
+          );
+        }
+      } catch (err) {
+        setWsError("Error processing price update");
+      }
+    };
+
+    ws.onerror = () => {
+      setWsError("WebSocket connection error");
+      setWsConnected(false);
+    };
+
+    ws.onclose = () => {
+      setWsConnected(false);
+
+      // Attempt to reconnect if we haven't exceeded max attempts
+      if (reconnectAttemptsRef.current < MAX_RECONNECT_ATTEMPTS) {
+        reconnectAttemptsRef.current += 1;
+        
+        reconnectTimeoutRef.current = setTimeout(() => {
+          connectWebSocket();
+        }, RECONNECT_DELAY);
+      } else {
+        setWsError("Failed to connect after multiple attempts");
+      }
+    };
+
+    wsRef.current = ws;
+  } catch (error) {
+    setWsError("Failed to initialize WebSocket");
+  }
+};
 
   const allColumns = [
     { key: "symbol", label: "Symbol", format: "text" },
@@ -497,6 +659,11 @@ export default function StockMetrics() {
         <div className="header-top">
           <div>
             <h1>Market Metrics & Analysis</h1>
+            <div className={`ws-status ${wsConnected ? 'connected' : 'disconnected'}`}>
+              <span className="ws-status-dot"></span>
+              {wsConnected ? "Live" : "Reconnecting..."}
+              {wsError && <span className="ws-error-text">({wsError})</span>}
+            </div>
             <div style={{ 
               display: 'flex', 
               alignItems: 'center', 
@@ -728,5 +895,13 @@ export default function StockMetrics() {
         />
       )}
     </div>
+  );
+}
+
+export default function StockMetrics() {
+  return (
+    <ErrorBoundary>
+      <StockMetricsContent />
+    </ErrorBoundary>
   );
 }
