@@ -1,64 +1,83 @@
-# price_api.py
-from flask import Flask, request, jsonify
-from flask_cors import CORS
-from price_data import get_quotes_for_universe
-import os
-import json
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query
+from fastapi.middleware.cors import CORSMiddleware
+from typing import List, Optional
+import logging
+import asyncio
+from dotenv import load_dotenv
 
+load_dotenv()
 
-app = Flask(__name__)
-CORS(app)  # Enable CORS for all routes
+from price_service import PriceService
+from universe_utils import load_universe
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("MainApp")
 
-@app.route("/", methods=["GET"])
-def root():
-    return jsonify({"status": "alive"})
+app = FastAPI()
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-@app.route("/equities/quotes", methods=["GET"])
-def get_equity_quotes():
-    """
-    GET /equities/quotes?symbols=AAPL&symbols=MSFT&symbols=GOOGL
-    Returns JSON for all requested symbols.
-    """
-    # Get list of symbols from query params
-    symbols = request.args.getlist("symbols")
-    
-    if not symbols:
-        return jsonify({"error": "No symbols provided"}), 400
-    
-    # Get optional params with defaults
-    provider = request.args.get("provider", "yfinance")
-    chunk_size = int(request.args.get("chunk_size", 50))
-    
-    # Fetch the data
-    data = get_quotes_for_universe(symbols, provider=provider, chunk_size=chunk_size)
-    
-    response = {
-        "provider": provider,
-        "symbols": symbols,
-        "data": data
+service = PriceService()
+
+@app.get("/health")
+def health_check():
+    """Quick health check that responds immediately"""
+    return {
+        "status": "healthy",
+        "service": "EuroPitch Price API",
+        "ws_connected": service.ws_connected if hasattr(service, 'ws_connected') else False
     }
-    
-    return jsonify(response)
 
+@app.on_event("startup")
+async def startup_event():
+    """Start background services without blocking"""
+    logger.info("HTTP Server ready - accepting requests")
+    asyncio.create_task(service.start())
+    logger.info("Background price services starting...")
 
-@app.route("/equities/universe", methods=["GET"])
+@app.get("/")
+def home():
+    return {
+        "status": "online",
+        "service": "EuroPitch Price API",
+        "msg": "Send it."
+    }
+
+@app.get("/equities/universe")
 def get_universe():
-    """Return the static S&P500 tickers JSON hosted in the backend/prices folder."""
     try:
-        base = os.path.dirname(__file__)
-        path = os.path.join(base, "sp500_tickers.json")
-        with open(path, "r") as f:
-            data = json.load(f)
-        # Ensure it's a list
-        if isinstance(data, dict):
-            # if object mapping name->symbol, return values
-            data = list(data.values())
-        return jsonify({"symbols": data})
+        data = load_universe()
+        return data
     except Exception as e:
-        return jsonify({"error": "Could not load universe", "details": str(e)}), 500
+        return {"error": f"Failed to load universe: {str(e)}"}
 
+@app.get("/equities/quotes")
+def get_quotes(symbols: List[str] = Query(None)):
+    if not symbols:
+        symbols = service.symbols
+    data = service.get_snapshot(symbols)
+    return {"data": data}
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await service.manager.connect(websocket)
+    try:
+        while True:
+            data = await websocket.receive_text()
+            if data == "ping":
+                await websocket.send_text("pong")
+    except WebSocketDisconnect:
+        service.manager.disconnect(websocket)
+    except Exception as e:
+        logger.error(f"WebSocket error: {e}")
+        service.manager.disconnect(websocket)
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=5000)

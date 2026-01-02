@@ -1,17 +1,102 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import StockDetailModal from "../StockDetailModal/StockDetailModal";
 import ComparisonPanel from "../ComparisonPanel/ComparisonPanel";
 import StockOrderModal from "../StockOrderModal/StockOrderModal";
 import "./StockMetrics.css";
 
-// The component will load a tickers list from the public folder (public/nyse_tickers.json)
-// This file should contain an array of symbols (e.g. ["AAPL","MSFT",...]) and can
-// be replaced with a full list of NYSE symbols when you have it. Loading from the
-// public folder makes it easy to swap out without rebuilding the app.
 
-export default function StockMetrics() {
+// ============================================
+// TypeScript Interfaces
+// ============================================
+interface Stock {
+  id: string;
+  symbol: string;
+  name: string;
+  sector: string;
+  price: number;
+  change: number;
+  changePercent: number;
+  marketCap: number | null;
+  volume: number | null;
+  peRatio: number | null;
+  pbRatio: number | null;
+  pegRatio: number | null;
+  dividendYield: number | null;
+  roe: number | null;
+  roa: number | null;
+  debtToEquity: number | null;
+  currentRatio: number | null;
+  grossMargin: number | null;
+  operatingMargin: number | null;
+  netMargin: number | null;
+  revenueGrowth: number | null;
+  earningsGrowth: number | null;
+  rsi: number | null;
+  beta: number | null;
+}
+
+interface WebSocketMessage {
+  type: string;
+  data: Record<string, {
+    price: number;
+    change: number;
+    change_percent: number;
+  }>;
+}
+
+interface MarketStatus {
+  isOpen: boolean;
+  status: string;
+  nextChange: string;
+}
+
+interface SortConfig {
+  key: string;
+  direction: "asc" | "desc";
+}
+
+// ============================================
+// Error Boundary Component
+// ============================================
+class ErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean; error: Error | null }
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    // Add Sentry or error logging here later
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="error-boundary">
+          <h2>Something went wrong</h2>
+          <p>We're sorry, but there was an error loading the stock metrics.</p>
+          <button onClick={() => window.location.reload()} className="btn-primary">
+            Reload Page
+          </button>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
+function StockMetricsContent() {
   const [stocks, setStocks] = useState([]);
   const [tickers, setTickers] = useState<string[]>([]);
+  const [sectorMapping, setSectorMapping] = useState<Record<string, string>>({});
+  const [nameMapping, setNameMapping] = useState<Record<string, string>>({}); // ✅ NEW: Stock name mapping
   const [tickersLoadError, setTickersLoadError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [sortConfig, setSortConfig] = useState({
@@ -25,8 +110,6 @@ export default function StockMetrics() {
     "symbol",
     "name",
     "price",
-    "change",
-    "changePercent",
     "marketCap",
     "peRatio",
     "volume",
@@ -36,10 +119,88 @@ export default function StockMetrics() {
   const [showColumnCustomizer, setShowColumnCustomizer] = useState(false);
   const [sectorFilter, setSectorFilter] = useState("all");
   const [loading, setLoading] = useState(true);
+  const [marketStatus, setMarketStatus] = useState<{
+    isOpen: boolean;
+    status: string;
+    nextChange: string;
+  }>({ isOpen: false, status: "Closed", nextChange: "" });
 
-  const API_BASE_URL = "https://europitch-trading-prices.vercel.app"; // change if needed
-  // Chunk size for backend requests to avoid very long query strings
+  // WebSocket connection state
+  const [wsConnected, setWsConnected] = useState(false);
+  const [wsError, setWsError] = useState<string | null>(null);
+
+  // WebSocket refs for reconnection logic
+  const wsRef = useRef<WebSocket | null>(null);
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const reconnectAttemptsRef = useRef(0);
+  const MAX_RECONNECT_ATTEMPTS = 5;
+  const RECONNECT_DELAY = 3000;
+
+
+  const API_BASE_URL = "https://trading-software.onrender.com"; // Use https://trading-software.onrender.com when committing
   const FETCH_CHUNK_SIZE = 50;
+
+  const connectWebSocket = () => {
+  try {
+    const wsUrl = API_BASE_URL.replace("http", "ws") + "/ws";
+    const ws = new WebSocket(wsUrl);
+
+    ws.onopen = () => {
+      setWsConnected(true);
+      setWsError(null);
+      reconnectAttemptsRef.current = 0;
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const message: WebSocketMessage = JSON.parse(event.data);
+        
+        if (message.type === "price_update") {
+          setStocks((prevStocks) =>
+            prevStocks.map((stock) => {
+              const update = message.data[stock.symbol];
+              if (update) {
+                return {
+                  ...stock,
+                  price: update.price,
+                  change: update.change,
+                  changePercent: update.change_percent,
+                };
+              }
+              return stock;
+            })
+          );
+        }
+      } catch (err) {
+        setWsError("Error processing price update");
+      }
+    };
+
+    ws.onerror = () => {
+      setWsError("WebSocket connection error");
+      setWsConnected(false);
+    };
+
+    ws.onclose = () => {
+      setWsConnected(false);
+
+      // Attempt to reconnect if we haven't exceeded max attempts
+      if (reconnectAttemptsRef.current < MAX_RECONNECT_ATTEMPTS) {
+        reconnectAttemptsRef.current += 1;
+        
+        reconnectTimeoutRef.current = setTimeout(() => {
+          connectWebSocket();
+        }, RECONNECT_DELAY);
+      } else {
+        setWsError("Failed to connect after multiple attempts");
+      }
+    };
+
+    wsRef.current = ws;
+  } catch (error) {
+    setWsError("Failed to initialize WebSocket");
+  }
+};
 
   const allColumns = [
     { key: "symbol", label: "Symbol", format: "text" },
@@ -67,37 +228,175 @@ export default function StockMetrics() {
     { key: "beta", label: "Beta", format: "decimal" },
   ];
 
-  // Fetch on mount + background refresh every 5s without UI flicker
-  // Load the static tickers file once on mount. The frontend will only use
-  // this list (no fallbacks or dynamic sources). If the file cannot be
-  // loaded, we show an error and stop.
+  // ✅ Calculate time remaining using PROPER timezone handling
+  const formatTimeRemaining = (targetTimeEST: Date): string => {
+    const nowEST = new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" }));
+    const diffMs = targetTimeEST.getTime() - nowEST.getTime();
+    
+    if (diffMs <= 0) return "now";
+    
+    const hours = Math.floor(diffMs / (1000 * 60 * 60));
+    const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+    
+    if (hours > 24) {
+      const days = Math.floor(hours / 24);
+      const remainingHours = hours % 24;
+      return `${days}d ${remainingHours}h`;
+    } else if (hours > 0) {
+      return `${hours}h ${minutes}m`;
+    } else {
+      return `${minutes}m`;
+    }
+  };
+
+  // ✅ Check market status using ONLY EST timezone
+  const checkMarketStatus = () => {
+    const nowEST = new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" }));
+    const day = nowEST.getDay();
+    const hours = nowEST.getHours();
+    const minutes = nowEST.getMinutes();
+    const timeInMinutes = hours * 60 + minutes;
+
+    if (day === 0 || day === 6) {
+      const nextMonday = new Date(nowEST);
+      const daysUntilMonday = day === 0 ? 1 : 2;
+      nextMonday.setDate(nowEST.getDate() + daysUntilMonday);
+      nextMonday.setHours(9, 30, 0, 0);
+      
+      return {
+        isOpen: false,
+        status: "Closed (Weekend)",
+        nextChange: `Opens in ${formatTimeRemaining(nextMonday)}`
+      };
+    }
+
+    const marketOpen = 9 * 60 + 30;
+    const marketClose = 16 * 60;
+    const preMarketStart = 4 * 60;
+    const afterHoursEnd = 20 * 60;
+
+    if (timeInMinutes >= marketOpen && timeInMinutes < marketClose) {
+      const closingTime = new Date(nowEST);
+      closingTime.setHours(16, 0, 0, 0);
+      
+      return {
+        isOpen: true,
+        status: "Market Open",
+        nextChange: `Closes in ${formatTimeRemaining(closingTime)}`
+      };
+    } else if (timeInMinutes >= preMarketStart && timeInMinutes < marketOpen) {
+      const openingTime = new Date(nowEST);
+      openingTime.setHours(9, 30, 0, 0);
+      
+      return {
+        isOpen: false,
+        status: "Pre-Market",
+        nextChange: `Opens in ${formatTimeRemaining(openingTime)}`
+      };
+    } else if (timeInMinutes >= marketClose && timeInMinutes < afterHoursEnd) {
+      const nextOpen = new Date(nowEST);
+      if (day === 5) {
+        nextOpen.setDate(nowEST.getDate() + 3);
+      } else {
+        nextOpen.setDate(nowEST.getDate() + 1);
+      }
+      nextOpen.setHours(9, 30, 0, 0);
+      
+      return {
+        isOpen: false,
+        status: "After Hours",
+        nextChange: `Opens in ${formatTimeRemaining(nextOpen)}`
+      };
+    } else {
+      const nextOpen = new Date(nowEST);
+      if (timeInMinutes >= afterHoursEnd) {
+        if (day === 5) {
+          nextOpen.setDate(nowEST.getDate() + 3);
+        } else {
+          nextOpen.setDate(nowEST.getDate() + 1);
+        }
+      }
+      nextOpen.setHours(9, 30, 0, 0);
+      
+      return {
+        isOpen: false,
+        status: "Closed",
+        nextChange: `Opens in ${formatTimeRemaining(nextOpen)}`
+      };
+    }
+  };
+
+  // Update market status every minute
+  useEffect(() => {
+    const updateMarketStatus = () => {
+      setMarketStatus(checkMarketStatus());
+    };
+
+    updateMarketStatus();
+    const interval = setInterval(updateMarketStatus, 60000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  // ✅ Load tickers from API - USING EXACT NAMES FROM UNIVERSE.JSON
   useEffect(() => {
     let mounted = true;
 
     const loadTickers = async () => {
       try {
-        const res = await fetch("/nyse_tickers.json");
+        console.log(`🔍 Fetching universe from: ${API_BASE_URL}/equities/universe`);
+        const res = await fetch(`${API_BASE_URL}/equities/universe`);
+        
         if (!res.ok) {
-          throw new Error(`Failed to load /nyse_tickers.json: ${res.status}`);
+          throw new Error(`Failed to load universe from API: ${res.status}`);
         }
+        
         const json = await res.json();
-        let symbols: string[] = [];
-        if (Array.isArray(json)) symbols = json as string[];
-        else if (typeof json === "object" && json !== null)
-          symbols = Object.values(json) as string[];
-        else throw new Error("Invalid format for nyse_tickers.json");
+        console.log("📦 Universe response:", json);
+        
+        const symbols: string[] = [];
+        const sectorMap: Record<string, string> = {};
+        const nameMap: Record<string, string> = {}; // ✅ NEW
+        
+        if (json && json.sectors && typeof json.sectors === 'object') {
+          Object.entries(json.sectors).forEach(([sectorKey, sectorData]: [string, any]) => {
+            if (sectorData && sectorData.stocks && Array.isArray(sectorData.stocks)) {
+              // ✅ Use the 'name' field from sector data - EXACT from universe.json
+              const sectorDisplayName = sectorData.name || sectorKey;
+              
+              sectorData.stocks.forEach((stock: any) => {
+                if (stock && stock.ticker) {
+                  symbols.push(stock.ticker);
+                  
+                  // ✅ Store EXACT sector name from universe.json
+                  sectorMap[stock.ticker] = sectorDisplayName;
+                  
+                  // ✅ Store EXACT stock name from universe.json
+                  if (stock.name) {
+                    nameMap[stock.ticker] = stock.name;
+                  }
+                }
+              });
+            }
+          });
+        }
+        
+        console.log("✅ Parsed symbols:", symbols.length, symbols);
+        console.log("✅ Parsed sector mapping:", sectorMap);
+        console.log("✅ Parsed name mapping:", nameMap);
 
         if (mounted) {
           if (symbols.length === 0) {
-            setTickersLoadError(
-              "Ticker list is empty. Please populate /nyse_tickers.json with symbols."
-            );
+            setTickersLoadError("Ticker list is empty from API.");
           } else {
             setTickers(symbols);
+            setSectorMapping(sectorMap);
+            setNameMapping(nameMap); // ✅ NEW
+            console.log(`✅ Loaded ${symbols.length} tickers from API`);
           }
         }
       } catch (err: any) {
-        console.error("Error loading static tickers", err);
+        console.error("❌ Error loading tickers from API", err);
         if (mounted) setTickersLoadError(err.message || String(err));
       }
     };
@@ -109,10 +408,10 @@ export default function StockMetrics() {
     };
   }, []);
 
-  // Fetch prices/fundamentals in batches whenever the static tickers list is set
+  // Fetch prices/fundamentals in batches
   useEffect(() => {
     if (tickersLoadError) return;
-    if (!tickers || tickers.length === 0) return; // wait until tickers loaded
+    if (!tickers || tickers.length === 0) return;
 
     let isFirst = true;
     let intervalId: any;
@@ -122,76 +421,69 @@ export default function StockMetrics() {
         if (isFirst) setLoading(true);
 
         const symbols = tickers;
-
-        // Batch the requests into chunks to avoid extremely long URLs
         const chunks: string[][] = [];
         for (let i = 0; i < symbols.length; i += FETCH_CHUNK_SIZE) {
           chunks.push(symbols.slice(i, i + FETCH_CHUNK_SIZE));
         }
 
-        const results: any[] = [];
-
-        for (const chunk of chunks) {
+        const fetchPromises = chunks.map(async (chunk) => {
           const params = new URLSearchParams();
           chunk.forEach((sym) => params.append("symbols", sym));
-          params.append("chunk_size", String(FETCH_CHUNK_SIZE));
-
+          
           const res = await fetch(
             `${API_BASE_URL}/equities/quotes?${params.toString()}`
           );
-          if (!res.ok) {
-            console.warn("Chunk fetch failed", res.status);
-            continue;
-          }
+          if (!res.ok) return [];
+          
           const json = await res.json();
-          const data = Object.values(json.data || {});
-          results.push(...data);
-        }
+          return Object.values(json.data || {});
+        });
 
-        const stocksArray = results.map((row: any, idx: number) => ({
-          id: idx + 1,
-          symbol: row.symbol || "",
-          name: row.name || row.symbol || "",
-          sector: row.sector || "Unknown",
-          price: row.price || 0,
-          change:
-            row.price && row.previous_close
-              ? row.price - row.previous_close
-              : 0,
-          changePercent:
-            row.price && row.previous_close
-              ? ((row.price - row.previous_close) / row.previous_close) * 100
-              : 0,
-          marketCap: row.market_cap || 0,
-          volume: row.volume || 0,
-          peRatio: row.pe_ratio || null,
-          pbRatio: row.pb_ratio || null,
-          pegRatio: row.peg_ratio || null,
-          dividendYield: row.dividend_yield ? row.dividend_yield * 100 : null,
-          roe: row.roe ? row.roe * 100 : null,
-          roa: row.roa ? row.roa * 100 : null,
-          debtToEquity: row.debt_to_equity || null,
-          currentRatio: row.current_ratio || null,
-          quickRatio: null,
-          grossMargin: row.gross_margin ? row.gross_margin * 100 : null,
-          operatingMargin: row.operating_margin
-            ? row.operating_margin * 100
-            : null,
-          netMargin: row.net_margin ? row.net_margin * 100 : null,
-          revenueGrowth: row.revenue_growth ? row.revenue_growth * 100 : null,
-          earningsGrowth: row.earnings_growth
-            ? row.earnings_growth * 100
-            : null,
-          rsi: row.rsi || null,
-          beta: row.beta || null,
-          fiftyTwoWeekHigh: row["52_week_high"] || null,
-          fiftyTwoWeekLow: row["52_week_low"] || null,
-          avgVolume: null,
-        }));
+        const chunkResults = await Promise.all(fetchPromises);
+        const results = chunkResults.flat();
+
+        // ✅ Use nameMapping and sectorMapping from universe.json
+        const stocksArray = results.map((row: any, idx: number) => {
+          const symbol = row.symbol || "";
+          const sector = sectorMapping[symbol] || "Unknown";
+          const name = nameMapping[symbol] || symbol; // ✅ Use EXACT name from universe.json
+          
+          return {
+            id: idx + 1,
+            symbol: symbol,
+            name: name, // ✅ EXACT name from universe.json
+            sector: sector, // ✅ EXACT sector name from universe.json
+            price: row.price || 0,
+            change: row.change || 0,
+            changePercent: row.change_percent || 0,
+            marketCap: row.market_cap || 0,
+            volume: row.volume || 0,
+            peRatio: row.pe_ratio || null,
+            pbRatio: row.price_to_book || null,
+            pegRatio: row.peg_ratio || null,
+            dividendYield: row.dividend_yield || null,
+            roe: row.roe || null,
+            roa: row.roa || null,
+            debtToEquity: row.debt_to_equity || null,
+            currentRatio: row.current_ratio || null,
+            quickRatio: row.quick_ratio || null,
+            grossMargin: row.gross_margin || null,
+            operatingMargin: row.operating_margin || null,
+            netMargin: row.profit_margin || null,
+            revenueGrowth: row.revenue_growth || null,
+            earningsGrowth: row.earnings_growth || null,
+            rsi: row.rsi || null,
+            beta: row.beta || null,
+            fiftyTwoWeekHigh: row["52_week_high"] || null,
+            fiftyTwoWeekLow: row["52_week_low"] || null,
+            avgVolume: row.avg_volume || null,
+          };
+        });
 
         setStocks(stocksArray);
+        
       } catch (err) {
-        console.error("Failed to load market data", err);
+        console.error("💥 ERROR in fetchStocks:", err);
       } finally {
         if (isFirst) {
           setLoading(false);
@@ -200,20 +492,15 @@ export default function StockMetrics() {
       }
     };
 
-    // Initial load
     fetchStocks();
-    // Background refresh every 10 seconds (less aggressive when loading many symbols)
-    intervalId = setInterval(fetchStocks, 10000);
+    intervalId = setInterval(fetchStocks, 30000);
 
     return () => {
       clearInterval(intervalId);
     };
-  }, [tickers, tickersLoadError, API_BASE_URL]);
+  }, [tickers, tickersLoadError, sectorMapping, nameMapping]); // ✅ Added nameMapping dependency
 
-  // Track collapsed state for each sector (true -> collapsed)
-  const [collapsedSectors, setCollapsedSectors] = useState<
-    Record<string, boolean>
-  >({});
+  const [collapsedSectors, setCollapsedSectors] = useState<Record<string, boolean>>({});
 
   const toggleSectorCollapse = (sector: string) => {
     setCollapsedSectors((prev) => ({ ...prev, [sector]: !prev[sector] }));
@@ -245,7 +532,6 @@ export default function StockMetrics() {
     return filtered;
   }, [stocks, searchTerm, sectorFilter, sortConfig]);
 
-  // Group filtered stocks by sector for display (must be a hook call before any early returns)
   const groupedBySector = useMemo(() => {
     const groups: Record<string, any[]> = {};
     filteredAndSortedStocks.forEach((s) => {
@@ -293,7 +579,7 @@ export default function StockMetrics() {
         return value.toLocaleString();
 
       case "percent":
-        return `${value.toFixed(2)}%`;
+        return `${(value * 1).toFixed(2)}%`;
 
       case "decimal":
         return value.toFixed(2);
@@ -371,7 +657,35 @@ export default function StockMetrics() {
     <div className="metrics-container">
       <div className="metrics-header">
         <div className="header-top">
-          <h1>Market Metrics & Analysis</h1>
+          <div>
+            <h1>Market Metrics & Analysis</h1>
+            <div className={`ws-status ${wsConnected ? 'connected' : 'disconnected'}`}>
+              <span className="ws-status-dot"></span>
+              {wsConnected ? "Live" : "Reconnecting..."}
+              {wsError && <span className="ws-error-text">({wsError})</span>}
+            </div>
+            <div style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: '8px', 
+              marginTop: '8px',
+              fontSize: '14px'
+            }}>
+              <span style={{
+                display: 'inline-block',
+                width: '10px',
+                height: '10px',
+                borderRadius: '50%',
+                backgroundColor: marketStatus.isOpen ? '#10b981' : '#ef4444'
+              }}></span>
+              <span style={{ fontWeight: '600' }}>
+                {marketStatus.status}
+              </span>
+              <span style={{ color: '#6b7280' }}>
+                · {marketStatus.nextChange}
+              </span>
+            </div>
+          </div>
           <div className="header-actions">
             <button
               className={`btn-compare ${compareMode ? "active" : ""}`}
@@ -581,5 +895,13 @@ export default function StockMetrics() {
         />
       )}
     </div>
+  );
+}
+
+export default function StockMetrics() {
+  return (
+    <ErrorBoundary>
+      <StockMetricsContent />
+    </ErrorBoundary>
   );
 }
