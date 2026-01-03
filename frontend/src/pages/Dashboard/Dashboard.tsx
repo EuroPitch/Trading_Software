@@ -4,6 +4,7 @@ import "./Dashboard.css";
 import { supabase } from "../../supabaseClient";
 import { useAuth } from "../../context/AuthContext";
 
+
 type PortfolioSummary = {
   totalValue: number;
   totalPnL: number;
@@ -12,6 +13,7 @@ type PortfolioSummary = {
   initialCapital: number;
   positionCount: number;
 };
+
 
 type TradingStats = {
   totalTrades: number;
@@ -26,6 +28,7 @@ type TradingStats = {
   totalNotional: number;
 };
 
+
 type Position = {
   symbol: string;
   name?: string;
@@ -39,6 +42,7 @@ type Position = {
   priceStale?: boolean;
 };
 
+
 export default function Dashboard() {
   const { session, loading: authLoading } = useAuth();
   const navigate = useNavigate();
@@ -46,6 +50,7 @@ export default function Dashboard() {
   const isFetchingPricesRef = useRef(false);
   const hasInitializedRef = useRef(false);
   const lastKnownPricesRef = useRef<Map<string, number>>(new Map());
+
 
   const [positions, setPositions] = useState<Position[]>([]);
   const [priceMap, setPriceMap] = useState<Map<string, number>>(new Map());
@@ -75,6 +80,7 @@ export default function Dashboard() {
   });
   const [societyName, setSocietyName] = useState("Society");
 
+
   const handleLogout = async () => {
     try {
       await supabase.auth.signOut();
@@ -86,15 +92,19 @@ export default function Dashboard() {
     }
   };
 
+
   const formatCurrency = (value: number) =>
     new Intl.NumberFormat("en-UK", { style: "currency", currency: "EUR" }).format(value);
 
+
   const formatPercent = (value: number) => `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
+
 
   const calculatePnL = useCallback((position: Position, currentPrice: number): number => {
     if (currentPrice === 0 || position.entryPrice === 0 || position.quantity === 0) {
       return 0;
     }
+
 
     const quantity = Math.abs(position.quantity);
     if (position.positionType === "LONG") {
@@ -104,28 +114,34 @@ export default function Dashboard() {
     }
   }, []);
 
+
   const fetchPrices = useCallback(async (symbols: string[]): Promise<Map<string, number>> => {
     if (isFetchingPricesRef.current) {
       console.log("⏭️ Skipping price fetch - already in progress");
       return new Map();
     }
 
+
     const priceMap = new Map<string, number>();
     if (symbols.length === 0) return priceMap;
+
 
     isFetchingPricesRef.current = true;
     try {
       const symbolParams = symbols.map((s) => `symbols=${s}`).join("&");
       console.log(`🔄 Fetching prices for: ${symbols.join(", ")}`);
 
+
       const priceResponse = await fetch(
         `https://trading-software.onrender.com/equities/quotes?${symbolParams}&chunk_size=50`,
         { signal: AbortSignal.timeout(10000) }
       );
 
+
       if (priceResponse.ok) {
         const priceData = await priceResponse.json();
         console.log("📦 API Response:", JSON.stringify(priceData, null, 2));
+
 
         // Handle nested structure with "data" wrapper
         if (priceData.data && typeof priceData.data === "object") {
@@ -161,6 +177,7 @@ export default function Dashboard() {
           });
         }
 
+
         console.log(`✅ Successfully fetched ${priceMap.size} prices`);
       } else {
         console.error(`❌ API returned status ${priceResponse.status}`);
@@ -171,13 +188,16 @@ export default function Dashboard() {
       isFetchingPricesRef.current = false;
     }
 
+
     return priceMap;
   }, []);
+
 
   const calculatePnLForDisplay = useCallback((position: Position) => {
     const currentPrice = priceMap.get(position.symbol.toUpperCase().trim()) ?? position.currentPrice;
     return calculatePnL(position, currentPrice);
   }, [priceMap, calculatePnL]);
+
 
   const calculatePnLPercent = useCallback((position: Position) => {
     const pnl = calculatePnLForDisplay(position);
@@ -186,16 +206,41 @@ export default function Dashboard() {
     return (pnl / costBasis) * 100;
   }, [calculatePnLForDisplay]);
 
+
+  // Sync portfolio to database
+  const syncPortfolioToDatabase = useCallback(async (userId: string, totalEquity: number, realizedPnL: number) => {
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ 
+          total_equity: totalEquity,
+          realized_pnl: realizedPnL
+        })
+        .eq('id', userId);
+
+      if (error) {
+        console.error('❌ Failed to sync portfolio to DB:', error);
+      } else {
+        console.log('✅ Portfolio synced to DB - Total Equity:', totalEquity, 'Realized P&L:', realizedPnL);
+      }
+    } catch (err) {
+      console.error('❌ Error syncing portfolio:', err);
+    }
+  }, []);
+
+
   useEffect(() => {
     if (hasInitializedRef.current) {
       console.log("⏭️ Already initialized, skipping");
       return;
     }
 
+
     const fetchDashboardData = async () => {
       console.log("🚀 Initializing dashboard...");
       setLoading(true);
       setError(null);
+
 
       try {
         const userId = session?.user?.id;
@@ -204,10 +249,13 @@ export default function Dashboard() {
           return;
         }
 
+
         hasInitializedRef.current = true;
+
 
         let initialCapital = 100000;
         let fetchedSocietyName = "Society";
+
 
         try {
           const { data: profileData } = await supabase
@@ -215,6 +263,7 @@ export default function Dashboard() {
             .select("society_name, initial_capital")
             .eq("id", userId)
             .single();
+
 
           if (profileData?.initial_capital) {
             initialCapital = Number(profileData.initial_capital);
@@ -227,26 +276,32 @@ export default function Dashboard() {
           console.warn("Could not fetch profile data, using defaults");
         }
 
+
         const { data: tradesData, error: fetchError } = await supabase
           .from("trades")
           .select("*")
           .eq("profile_id", userId)
           .order("placed_at", { ascending: true });
 
+
         if (fetchError) throw fetchError;
+
 
         const trades = tradesData ?? [];
         const symbolNameMap = new Map<string, string>();
 
+
         // Calculate cash balance from trades
         let totalCostBasis = 0;
         let totalProceeds = 0;
+
 
         trades.forEach((trade: any) => {
           const side = (trade.side ?? "buy").toLowerCase();
           const quantity = Number(trade.quantity ?? 0);
           const price = Number(trade.price ?? 0);
           const notional = Number(trade.notional ?? quantity * price);
+
 
           if (side === "buy") {
             totalCostBasis += notional;
@@ -255,10 +310,13 @@ export default function Dashboard() {
           }
         });
 
+
         const calculatedCashBalance = initialCapital - totalCostBasis + totalProceeds;
+
 
         // Build positions map
         const positionsMap = new Map<string, any>();
+
 
         trades.forEach((trade: any) => {
           const symbol = (trade.symbol ?? "").toUpperCase().trim();
@@ -267,9 +325,11 @@ export default function Dashboard() {
           const price = Number(trade.price ?? 0);
           const notional = Number(trade.notional ?? quantity * price);
 
+
           if (trade.name) {
             symbolNameMap.set(symbol, trade.name);
           }
+
 
           if (!positionsMap.has(symbol)) {
             positionsMap.set(symbol, {
@@ -281,7 +341,9 @@ export default function Dashboard() {
             });
           }
 
+
           const position = positionsMap.get(symbol)!;
+
 
           if (side === "buy") {
             position.quantity += quantity;
@@ -290,7 +352,9 @@ export default function Dashboard() {
             const oldQuantity = position.quantity;
             const oldCostBasis = position.costBasis;
 
+
             position.quantity -= quantity;
+
 
             // Reducing a long position (staying long)
             if (oldQuantity > 0 && position.quantity >= 0) {
@@ -312,25 +376,32 @@ export default function Dashboard() {
           }
         });
 
+
         const aggregatedPositions = Array.from(positionsMap.values()).filter(
           (pos) => Math.abs(pos.quantity) > 0.0001
         );
 
+
         setInitialCapital(initialCapital);
         setCashBalance(calculatedCashBalance);
 
+
         const symbols = [...new Set(aggregatedPositions.map((p) => p.symbol))];
+
 
         // Create positions with fallback prices
         const detailedPositions: Position[] = aggregatedPositions.map((pos) => {
           const entryPrice =
             pos.quantity !== 0 ? Math.abs(pos.costBasis) / Math.abs(pos.quantity) : 0;
 
+
           const lastKnownPrice = lastKnownPricesRef.current.get(pos.symbol);
           const currentPrice = lastKnownPrice && lastKnownPrice > 0 ? lastKnownPrice : entryPrice;
           const priceStale = !lastKnownPrice || lastKnownPrice === 0;
 
+
           const marketValue = Math.abs(pos.quantity) * currentPrice;
+
 
           return {
             symbol: pos.symbol,
@@ -346,18 +417,23 @@ export default function Dashboard() {
           };
         });
 
+
         setPositions(detailedPositions);
+
 
         // Calculate summary
         let totalMarketValue = 0;
+
 
         detailedPositions.forEach((pos) => {
           totalMarketValue += pos.marketValue;
         });
 
+
         const totalEquityCalculated = calculatedCashBalance + totalMarketValue;
         const totalPnLCalculated = totalEquityCalculated - initialCapital;
         const totalReturn = initialCapital === 0 ? 0 : (totalPnLCalculated / initialCapital) * 100;
+
 
         setSummary({
           totalValue: totalEquityCalculated,
@@ -367,6 +443,7 @@ export default function Dashboard() {
           initialCapital,
           positionCount: detailedPositions.length,
         });
+
 
         // Calculate trading stats
         const buyTrades = trades.filter((t: any) => (t.side ?? "buy").toLowerCase() === "buy").length;
@@ -378,6 +455,7 @@ export default function Dashboard() {
         );
         const averageTradeSize = trades.length > 0 ? totalNotional / trades.length : 0;
 
+
         const stockCounts = new Map<string, number>();
         trades.forEach((t: any) => {
           const symbol = t.symbol ?? "";
@@ -385,6 +463,7 @@ export default function Dashboard() {
             stockCounts.set(symbol, (stockCounts.get(symbol) ?? 0) + 1);
           }
         });
+
 
         let mostTradedStock = "-";
         let mostTradedCount = 0;
@@ -395,20 +474,24 @@ export default function Dashboard() {
           }
         });
 
+
         const now = new Date();
         const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         const weekAgo = new Date(today);
         weekAgo.setDate(weekAgo.getDate() - 7);
+
 
         const tradesToday = trades.filter((t: any) => {
           const tradeDate = new Date(t.placed_at ?? t.filled_at ?? "");
           return tradeDate >= today;
         }).length;
 
+
         const tradesThisWeek = trades.filter((t: any) => {
           const tradeDate = new Date(t.placed_at ?? t.filled_at ?? "");
           return tradeDate >= weekAgo;
         }).length;
+
 
         setTradingStats({
           totalTrades: trades.length,
@@ -423,12 +506,14 @@ export default function Dashboard() {
           totalNotional,
         });
 
+
         // Non-blocking price fetch
         console.log("🔄 Fetching initial prices (non-blocking)...");
         if (symbols.length > 0) {
           const prices = await fetchPrices(symbols);
           if (prices.size > 0) {
             setPriceMap(prices);
+
 
             const updatedPositions = detailedPositions.map((pos) => {
               const freshPrice = prices.get(pos.symbol);
@@ -443,18 +528,23 @@ export default function Dashboard() {
               return pos;
             });
 
+
             setPositions(updatedPositions);
+
 
             // Recalculate summary with fresh prices
             let updatedTotalMarketValue = 0;
+
 
             updatedPositions.forEach((pos) => {
               updatedTotalMarketValue += pos.marketValue;
             });
 
+
             const updatedTotalEquity = calculatedCashBalance + updatedTotalMarketValue;
             const updatedTotalPnLCalc = updatedTotalEquity - initialCapital;
             const updatedTotalReturn = initialCapital === 0 ? 0 : (updatedTotalPnLCalc / initialCapital) * 100;
+
 
             setSummary({
               totalValue: updatedTotalEquity,
@@ -467,10 +557,12 @@ export default function Dashboard() {
           }
         }
 
+
         // Set up price polling interval (30 seconds)
         if (priceIntervalRef.current) {
           clearInterval(priceIntervalRef.current);
         }
+
 
         if (symbols.length > 0) {
           priceIntervalRef.current = setInterval(async () => {
@@ -489,9 +581,11 @@ export default function Dashboard() {
       }
     };
 
+
     if (!authLoading && session?.user?.id) {
       fetchDashboardData();
     }
+
 
     return () => {
       console.log("🧹 Cleaning up dashboard...");
@@ -503,9 +597,11 @@ export default function Dashboard() {
     };
   }, [session?.user?.id, authLoading, fetchPrices]);
 
+
   // Separate effect to update positions when priceMap changes (from interval)
   useEffect(() => {
     if (positions.length === 0 || priceMap.size === 0) return;
+
 
     const updatedPositions = positions.map((pos) => {
       const freshPrice = priceMap.get(pos.symbol);
@@ -520,13 +616,16 @@ export default function Dashboard() {
       return pos;
     });
 
+
     // Only update if prices actually changed
     const hasChanges = updatedPositions.some((pos, idx) => 
       pos.currentPrice !== positions[idx].currentPrice
     );
 
+
     if (hasChanges) {
       setPositions(updatedPositions);
+
 
       // Recalculate summary
       let totalMarketValue = 0;
@@ -534,9 +633,11 @@ export default function Dashboard() {
         totalMarketValue += pos.marketValue;
       });
 
+
       const totalEquity = cashBalance + totalMarketValue;
       const totalPnL = totalEquity - initialCapital;
       const totalReturn = initialCapital === 0 ? 0 : (totalPnL / initialCapital) * 100;
+
 
       setSummary((prev) => ({
         ...prev,
@@ -547,6 +648,23 @@ export default function Dashboard() {
       }));
     }
   }, [priceMap]); // ONLY depend on priceMap, not positions or summary
+
+
+  // Sync portfolio to database when summary changes
+  useEffect(() => {
+    const userId = session?.user?.id;
+    if (!userId || summary.totalValue === 0 || loading) return;
+
+
+    // Debounce to avoid excessive DB writes (wait 3 seconds after last change)
+    const timeoutId = setTimeout(() => {
+      syncPortfolioToDatabase(userId, summary.totalValue, summary.totalPnL);
+    }, 3000);
+
+
+    return () => clearTimeout(timeoutId);
+  }, [summary.totalValue, summary.totalPnL, session?.user?.id, loading, syncPortfolioToDatabase]);
+
 
   return (
     <div className="dashboard-container">
@@ -559,6 +677,7 @@ export default function Dashboard() {
           Log Out
         </button>
       </div>
+
 
       {loading ? (
         <div className="loading">Loading dashboard...</div>
@@ -602,6 +721,7 @@ export default function Dashboard() {
             </div>
           </div>
 
+
           {positions.length > 0 ? (
             <div className="positions-section">
               <h2 className="positions-title">Active Positions</h2>
@@ -625,6 +745,7 @@ export default function Dashboard() {
                       const currentPrice = priceMap.get(position.symbol.toUpperCase().trim()) ?? position.currentPrice;
                       const pnl = calculatePnLForDisplay(position);
                       const pnlPercent = calculatePnLPercent(position);
+
 
                       return (
                         <tr key={`${position.symbol}-${idx}`} className="position-row">
@@ -691,6 +812,7 @@ export default function Dashboard() {
             </div>
           )}
 
+
           <div className="stats-overview">
             <h2>Trading Statistics</h2>
             <div className="stats-table-container">
@@ -715,6 +837,7 @@ export default function Dashboard() {
               </table>
             </div>
           </div>
+
 
           <div className="dashboard-actions">
             <h2>Quick Actions</h2>
