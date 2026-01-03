@@ -45,7 +45,6 @@ export default function TradeForm({ stock, onExecuteTrade, onClose }: TradeFormP
         {
           profile_id: user.id,
           symbol: stock.symbol,
-          name: stock.name || stock.symbol,
           side: action,
           quantity: quantity,
           price: effectivePrice,
