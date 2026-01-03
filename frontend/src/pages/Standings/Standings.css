@@ -115,6 +115,14 @@
   background: linear-gradient(135deg, #2b1708 0%, var(--panel) 100%);
 }
 
+.podium-card:not(.rank-1):not(.rank-2):not(.rank-3) {
+  color: #1a2332;
+}
+
+.podium-card:not(.rank-1):not(.rank-2):not(.rank-3) .podium-user h3 {
+  color: #003399; /* EU blue for names */
+}
+
 /* Ensure text is legible on dark gradient podium cards */
 .podium-card.rank-1,
 .podium-card.rank-2,
