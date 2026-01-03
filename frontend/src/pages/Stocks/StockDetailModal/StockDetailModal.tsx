@@ -181,7 +181,6 @@ export default function StockDetailModal({ stock, onClose }: any) {
               onClose={onClose}
               onExecuteTrade={(trade) => {
                 console.log("Trade executed:", trade);
-                // Handle trade execution here - hook up to your Supabase or FastAPI backend
               }}
             />
           ) : (
