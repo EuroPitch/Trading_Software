@@ -4,22 +4,24 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.6);
+  background: rgba(0, 0, 0, 0.85);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 1000;
   padding: 20px;
+  backdrop-filter: blur(8px);
 }
 
 .modal-content {
-  background: var(--panel);
+  background: linear-gradient(135deg, rgba(0, 24, 69, 0.95) 0%, rgba(0, 40, 85, 0.95) 100%);
   border-radius: 12px;
   width: 100%;
   max-width: 900px;
   max-height: 90vh;
   overflow-y: auto;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(201, 169, 97, 0.3);
 }
 
 .modal-header {
@@ -27,19 +29,20 @@
   justify-content: space-between;
   align-items: flex-start;
   padding: 24px;
-  border-bottom: 1px solid rgba(255,255,255,0.04);
+  border-bottom: 1px solid rgba(201, 169, 97, 0.25);
+  background: linear-gradient(135deg, rgba(0, 40, 85, 0.4) 0%, rgba(0, 24, 69, 0.2) 100%);
 }
 
 .modal-header h2 {
   font-size: 28px;
   font-weight: 700;
-  color: var(--text);
+  color: #ffffff;
   margin: 0 0 4px 0;
 }
 
 .modal-subtitle {
   font-size: 15px;
-  color: var(--muted);
+  color: #B8C5D6;
   margin: 0;
 }
 
@@ -47,7 +50,7 @@
   background: none;
   border: none;
   font-size: 32px;
-  color: var(--muted);
+  color: #B8C5D6;
   cursor: pointer;
   padding: 0;
   width: 36px;
@@ -56,11 +59,12 @@
   align-items: center;
   justify-content: center;
   border-radius: 6px;
-  transition: background 0.2s;
+  transition: all 0.2s;
 }
 
 .btn-modal-close:hover {
-  background: rgba(255,255,255,0.02);
+  background: rgba(201, 169, 97, 0.1);
+  color: #ffffff;
 }
 
 .stock-summary {
@@ -68,8 +72,8 @@
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 20px;
   padding: 24px;
-  background: rgba(255,255,255,0.02);
-  border-bottom: 1px solid rgba(255,255,255,0.04);
+  background: rgba(0, 40, 85, 0.2);
+  border-bottom: 1px solid rgba(201, 169, 97, 0.15);
 }
 
 .summary-item {
@@ -79,32 +83,33 @@
 }
 
 .summary-label {
-  font-size: 12px;
-  color: var(--muted);
+  font-size: 11px;
+  color: #B8C5D6;
   font-weight: 500;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.8px;
 }
 
 .summary-value {
   font-size: 18px;
   font-weight: 600;
-  color: var(--text);
+  color: #ffffff;
 }
 
 .summary-value.positive {
-  color: #059669;
+  color: #0B6E4F;
 }
 
 .summary-value.negative {
-  color: #dc2626;
+  color: #A4243B;
 }
 
 .modal-tabs {
   display: flex;
   gap: 4px;
   padding: 16px 24px 0;
-  border-bottom: 1px solid rgba(255,255,255,0.04);
+  border-bottom: 1px solid rgba(201, 169, 97, 0.15);
+  background: rgba(0, 24, 69, 0.3);
 }
 
 .tab-button {
@@ -113,23 +118,24 @@
   border: none;
   font-size: 14px;
   font-weight: 500;
-  color: var(--muted);
+  color: #B8C5D6;
   cursor: pointer;
   border-bottom: 2px solid transparent;
   transition: all 0.2s;
 }
 
 .tab-button:hover {
-  color: var(--text);
+  color: #ffffff;
 }
 
 .tab-button.active {
-  color: var(--brand);
-  border-bottom-color: var(--brand);
+  color: #C9A961;
+  border-bottom-color: #C9A961;
 }
 
 .modal-body {
   padding: 24px;
+  background: rgba(0, 24, 69, 0.2);
 }
 
 .metrics-grid {
@@ -143,29 +149,35 @@
   justify-content: space-between;
   align-items: center;
   padding: 16px;
-  background: rgba(255,255,255,0.02);
-  border-radius: 6px;
-  border: 1px solid rgba(255,255,255,0.04);
+  background: rgba(0, 40, 85, 0.3);
+  border-radius: 8px;
+  border: 1px solid rgba(201, 169, 97, 0.15);
+  transition: all 0.2s ease;
+}
+
+.metric-item:hover {
+  background: rgba(0, 40, 85, 0.4);
+  border-color: rgba(201, 169, 97, 0.25);
 }
 
 .metric-label {
   font-size: 14px;
-  color: var(--muted);
+  color: #B8C5D6;
   font-weight: 500;
 }
 
 .metric-value {
   font-size: 16px;
   font-weight: 600;
-  color: var(--text);
+  color: #ffffff;
 }
 
 .metric-value.positive {
-  color: #059669;
+  color: #0B6E4F;
 }
 
 .metric-value.negative {
-  color: #dc2626;
+  color: #A4243B;
 }
 
 .modal-footer {
@@ -173,8 +185,8 @@
   justify-content: flex-end;
   gap: 12px;
   padding: 20px 24px;
-  border-top: 1px solid rgba(255,255,255,0.04);
-  background: rgba(255,255,255,0.02);
+  border-top: 1px solid rgba(201, 169, 97, 0.2);
+  background: rgba(0, 24, 69, 0.3);
 }
 
 @media (max-width: 768px) {
@@ -183,15 +195,15 @@
     max-height: 100vh;
     border-radius: 0;
   }
-  
+
   .stock-summary {
     grid-template-columns: 1fr;
   }
-  
+
   .metrics-grid {
     grid-template-columns: 1fr;
   }
-  
+
   .modal-tabs {
     overflow-x: auto;
   }
@@ -211,8 +223,8 @@
   font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: #6b7280;
+  letter-spacing: 0.8px;
+  color: #ffffff;
   margin-bottom: 10px;
 }
 
@@ -225,8 +237,8 @@
 
 .toggle-button {
   padding: 12px 20px;
-  border: 2px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(201, 169, 97, 0.3);
+  background: rgba(0, 40, 85, 0.3);
   color: #ffffff;
   font-size: 14px;
   font-weight: 600;
@@ -238,31 +250,31 @@
 }
 
 .toggle-button:hover {
-  background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(0, 40, 85, 0.5);
+  border-color: rgba(201, 169, 97, 0.4);
 }
 
 .toggle-button.active {
-  background: #3b82f6;
-  border-color: #3b82f6;
+  background: linear-gradient(135deg, #002855 0%, #003366 100%);
+  border-color: #C9A961;
   color: white;
 }
 
 .toggle-button.active.buy {
-  background: #10b981;
-  border-color: #10b981;
+  background: linear-gradient(135deg, rgba(11, 110, 79, 0.4) 0%, rgba(14, 135, 97, 0.3) 100%);
+  border-color: #0B6E4F;
 }
 
 .toggle-button.active.sell {
-  background: #ef4444;
-  border-color: #ef4444;
+  background: linear-gradient(135deg, rgba(164, 36, 59, 0.4) 0%, rgba(180, 45, 70, 0.3) 100%);
+  border-color: #A4243B;
 }
 
 .trade-input {
   width: 100%;
   padding: 12px 16px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 2px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 40, 85, 0.4);
+  border: 1px solid rgba(201, 169, 97, 0.3);
   border-radius: 8px;
   color: #ffffff;
   font-size: 15px;
@@ -273,19 +285,20 @@
 
 .trade-input:focus {
   outline: none;
-  border-color: #3b82f6;
-  background: rgba(255, 255, 255, 0.05);
+  border-color: #C9A961;
+  background: rgba(0, 40, 85, 0.5);
+  box-shadow: 0 0 0 3px rgba(201, 169, 97, 0.1);
 }
 
 .trade-input::placeholder {
-  color: #6b7280;
+  color: rgba(184, 197, 214, 0.5);
 }
 
 .trade-summary {
   margin: 24px 0;
   padding: 16px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 40, 85, 0.3);
+  border: 1px solid rgba(201, 169, 97, 0.25);
   border-radius: 8px;
 }
 
@@ -294,7 +307,7 @@
   justify-content: space-between;
   align-items: center;
   padding: 10px 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid rgba(201, 169, 97, 0.1);
   font-size: 14px;
 }
 
@@ -302,13 +315,13 @@
   border-bottom: none;
   padding-top: 14px;
   margin-top: 8px;
-  border-top: 2px solid rgba(255, 255, 255, 0.1);
+  border-top: 1px solid rgba(201, 169, 97, 0.2);
   font-size: 16px;
   font-weight: 700;
 }
 
 .trade-summary .summary-row span:first-child {
-  color: #6b7280;
+  color: #B8C5D6;
   font-weight: 500;
 }
 
@@ -318,7 +331,7 @@
 }
 
 .trade-summary .summary-row.total span:last-child {
-  color: #3b82f6;
+  color: #C9A961;
   font-size: 18px;
 }
 
@@ -337,16 +350,18 @@
 }
 
 .btn-execute.buy {
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  background: linear-gradient(135deg, #0B6E4F 0%, #0E8761 100%);
+  box-shadow: 0 4px 12px rgba(11, 110, 79, 0.3);
 }
 
 .btn-execute.sell {
-  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  background: linear-gradient(135deg, #A4243B 0%, #B42D46 100%);
+  box-shadow: 0 4px 12px rgba(164, 36, 59, 0.3);
 }
 
 .btn-execute:hover:not(:disabled) {
   transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
 }
 
 .btn-execute:disabled {

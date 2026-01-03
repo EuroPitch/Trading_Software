@@ -1,101 +1,98 @@
-/* Modal Overlay */
+/* Professional Stock Order Modal */
+
 .stock-order-modal-overlay {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.7);
+  background: rgba(0, 0, 0, 0.85);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 1000;
-  backdrop-filter: blur(4px);
+  backdrop-filter: blur(8px);
 }
 
-/* Modal Container */
 .stock-order-modal {
-  background: var(--background, #1a1a1a);
+  background: linear-gradient(135deg, rgba(0, 24, 69, 0.95) 0%, rgba(0, 40, 85, 0.95) 100%);
   border-radius: 12px;
   width: 90%;
   max-width: 500px;
   max-height: 90vh;
   overflow-y: auto;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(201, 169, 97, 0.3);
 }
 
-/* Modal Title */
 .modal-title {
   font-size: 20px;
   font-weight: 600;
-  color: var(--text, #fff);
+  color: #ffffff;
   margin: 0;
   padding: 24px 24px 16px 24px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid rgba(201, 169, 97, 0.25);
 }
 
-/* Stock Header */
 .stock-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: 16px 24px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid rgba(201, 169, 97, 0.2);
+  background: rgba(0, 40, 85, 0.3);
 }
 
 .stock-symbol {
   font-size: 18px;
   font-weight: 700;
-  color: var(--text, #fff);
+  color: #ffffff;
 }
 
 .stock-name {
   font-size: 14px;
-  color: var(--muted, #999);
+  color: #B8C5D6;
   margin-left: 8px;
 }
 
-/* Current Price */
 .current-price {
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: 16px 24px;
-  background: rgba(255, 255, 255, 0.02);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  background: rgba(0, 40, 85, 0.2);
+  border-bottom: 1px solid rgba(201, 169, 97, 0.2);
 }
 
 .current-price .label {
   font-size: 13px;
   font-weight: 600;
-  color: var(--muted, #999);
+  color: #B8C5D6;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.8px;
 }
 
 .current-price .value {
   font-size: 24px;
   font-weight: 700;
-  color: var(--brand, #3b82f6);
+  color: #C9A961;
 }
 
-/* Section */
 .section {
   padding: 20px 24px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid rgba(201, 169, 97, 0.15);
 }
 
 .section .label {
   display: block;
   font-size: 13px;
   font-weight: 600;
-  color: var(--text, #fff);
+  color: #ffffff;
   margin-bottom: 12px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 
-/* Action Toggle */
 .action-toggle {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -104,9 +101,9 @@
 
 .toggle-button {
   padding: 12px 20px;
-  border: 2px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.02);
-  color: var(--text, #fff);
+  border: 1px solid rgba(201, 169, 97, 0.3);
+  background: rgba(0, 40, 85, 0.3);
+  color: #ffffff;
   font-size: 15px;
   font-weight: 600;
   border-radius: 8px;
@@ -115,23 +112,24 @@
 }
 
 .toggle-button:hover {
-  background: rgba(255, 255, 255, 0.04);
-  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(0, 40, 85, 0.5);
+  border-color: rgba(201, 169, 97, 0.4);
 }
 
 .toggle-button.active.buy {
-  background: #059669;
-  border-color: #059669;
+  background: linear-gradient(135deg, rgba(11, 110, 79, 0.4) 0%, rgba(14, 135, 97, 0.3) 100%);
+  border-color: #0B6E4F;
   color: white;
+  box-shadow: 0 4px 12px rgba(11, 110, 79, 0.2);
 }
 
 .toggle-button.active.sell {
-  background: #dc2626;
-  border-color: #dc2626;
+  background: linear-gradient(135deg, rgba(164, 36, 59, 0.4) 0%, rgba(180, 45, 70, 0.3) 100%);
+  border-color: #A4243B;
   color: white;
+  box-shadow: 0 4px 12px rgba(164, 36, 59, 0.2);
 }
 
-/* Order Type Toggle */
 .order-type-toggle {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -139,19 +137,19 @@
 }
 
 .order-type-toggle .toggle-button.active {
-  background: var(--brand, #3b82f6);
-  border-color: var(--brand, #3b82f6);
+  background: linear-gradient(135deg, #002855 0%, #003366 100%);
+  border-color: #C9A961;
   color: white;
+  box-shadow: 0 4px 12px rgba(0, 40, 85, 0.3);
 }
 
-/* Input Fields */
 .order-input {
   width: 100%;
   padding: 12px 16px;
-  background: rgba(255, 255, 255, 0.02);
-  border: 2px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 40, 85, 0.4);
+  border: 1px solid rgba(201, 169, 97, 0.3);
   border-radius: 8px;
-  color: var(--text, #fff);
+  color: #ffffff;
   font-size: 16px;
   font-weight: 500;
   transition: all 0.2s;
@@ -160,20 +158,20 @@
 
 .order-input:focus {
   outline: none;
-  border-color: var(--brand, #3b82f6);
-  background: rgba(255, 255, 255, 0.04);
+  border-color: #C9A961;
+  background: rgba(0, 40, 85, 0.5);
+  box-shadow: 0 0 0 3px rgba(201, 169, 97, 0.1);
 }
 
 .order-input::placeholder {
-  color: var(--muted, #999);
-  opacity: 0.6;
+  color: rgba(184, 197, 214, 0.4);
+  opacity: 1;
 }
 
-/* Order Summary */
 .order-summary {
   padding: 20px 24px;
-  background: rgba(255, 255, 255, 0.03);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  background: rgba(0, 40, 85, 0.2);
+  border-bottom: 1px solid rgba(201, 169, 97, 0.2);
 }
 
 .summary-row {
@@ -181,46 +179,45 @@
   justify-content: space-between;
   align-items: center;
   padding: 10px 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid rgba(201, 169, 97, 0.1);
 }
 
 .summary-row:last-child {
   border-bottom: none;
   padding-top: 16px;
   margin-top: 8px;
-  border-top: 2px solid rgba(255, 255, 255, 0.1);
+  border-top: 1px solid rgba(201, 169, 97, 0.25);
 }
 
 .summary-row .label {
   font-size: 14px;
-  color: var(--muted, #999);
+  color: #B8C5D6;
   font-weight: 500;
 }
 
 .summary-row:last-child .label {
   font-size: 15px;
   font-weight: 600;
-  color: var(--text, #fff);
+  color: #ffffff;
 }
 
 .summary-row .value {
   font-size: 16px;
   font-weight: 600;
-  color: var(--text, #fff);
+  color: #ffffff;
 }
 
 .summary-row:last-child .value {
   font-size: 20px;
   font-weight: 700;
-  color: var(--brand, #3b82f6);
+  color: #C9A961;
 }
 
-/* Modal Actions */
 .modal-actions {
   display: flex;
   gap: 12px;
   padding: 20px 24px;
-  background: rgba(255, 255, 255, 0.02);
+  background: rgba(0, 24, 69, 0.4);
 }
 
 .btn {
@@ -235,14 +232,14 @@
 
 .btn.cancel {
   flex: 1;
-  background: rgba(255, 255, 255, 0.04);
-  border: 2px solid rgba(255, 255, 255, 0.08);
-  color: var(--text, #fff);
+  background: rgba(0, 40, 85, 0.4);
+  border: 1px solid rgba(201, 169, 97, 0.3);
+  color: #ffffff;
 }
 
 .btn.cancel:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(0, 40, 85, 0.6);
+  border-color: rgba(201, 169, 97, 0.4);
 }
 
 .btn.execute {
@@ -254,16 +251,18 @@
 }
 
 .btn.execute.buy {
-  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+  background: linear-gradient(135deg, #0B6E4F 0%, #0E8761 100%);
+  box-shadow: 0 4px 12px rgba(11, 110, 79, 0.3);
 }
 
 .btn.execute.sell {
-  background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+  background: linear-gradient(135deg, #A4243B 0%, #B42D46 100%);
+  box-shadow: 0 4px 12px rgba(164, 36, 59, 0.3);
 }
 
 .btn.execute:hover:not(:disabled) {
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
 }
 
 .btn:disabled {
@@ -275,7 +274,6 @@
   transform: none;
 }
 
-/* Responsive */
 @media (max-width: 768px) {
   .stock-order-modal {
     width: 95%;

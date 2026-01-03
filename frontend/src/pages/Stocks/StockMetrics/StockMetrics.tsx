@@ -625,7 +625,7 @@ function StockMetricsContent() {
   if (loading) {
     return (
       <div className="metrics-container">
-        <div className="loading-spinner">Loading market data...</div>
+        <div className="loading">Loading market data...</div>
       </div>
     );
   }
