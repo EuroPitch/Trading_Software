@@ -157,7 +157,7 @@ export default function Login() {
             <div className="form-group checkbox-group">
               <label className="checkbox-label">
                 <input type="checkbox" name="remember" />
-                <span>Remember me for 30 days</span>
+                <span>Remember me</span>
               </label>
             </div>
 
