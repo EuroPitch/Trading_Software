@@ -1,11 +1,16 @@
 :root {
-  --bg: #0b0c10;           /* dark background */
-  --panel: #111318;        /* panels and cards */
-  --text: #f2f5fa;         /* main text color (light) */
-  --muted: #9aa3b2;        /* secondary text color */
-  --brand: #2e8cff;        /* EuroPitch blue */
-  --brand-ink: #0c4fb3;    /* darker hover blue */
-  --ring: rgba(46, 140, 255, 0.35);
+  --bg: #001a4d; /* Deep EU blue background */
+  --bg-light: #002966; /* Slightly lighter blue */
+  --panel: #ffffff; /* White panels */
+  --text: #1a2332; /* Dark text for white panels */
+  --text-light: #f5f7fa; /* Light text for blue backgrounds */
+  --muted: #5a6b7f; /* Dark muted for panels */
+  --muted-light: #c5d0e3; /* Light muted for blue backgrounds */
+  --brand: #003399; /* EU Blue */
+  --brand-ink: #0055cc; /* Lighter hover blue */
+  --accent: #FFCC00; /* EU Gold/Yellow */
+  --accent-dark: #d9a600; /* Darker gold for hover */
+  --ring: rgba(255, 204, 0, 0.35);
   --font-sans: 'Inter', 'IBM Plex Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
 }
 
@@ -21,8 +26,8 @@ html, body, #root {
 body {
   margin: 0;
   font-family: var(--font-sans);
-  color: var(--text);
-  background: linear-gradient(180deg, #0a0b0f, #0b0c10 30% 70%, #0a0b0f);
+  color: var(--text-light);
+  background: linear-gradient(180deg, #001433, #001a4d 30% 70%, #001433);
   line-height: 1.55;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -40,15 +45,15 @@ body {
   padding: 2rem 1.25rem;
 }
 
-/* HEADER */
+/* HEADER - DARKER EU BLUE THEME (like main website) */
 .header {
   position: sticky;
   top: 0;
   z-index: 100;
-  background: rgba(11, 13, 17, 0.85);
+  background: #001a4d; /* Dark navy blue like main site */
   backdrop-filter: blur(10px);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+  border-bottom: 2px solid #FFCC00;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
 }
 
 .nav-container {
@@ -75,8 +80,8 @@ body {
   height: 60px;
   width: auto;
   object-fit: contain;
-  filter: invert(1) brightness(1.2) contrast(1.1);
-  mix-blend-mode: screen;
+  /* Remove the invert filter to keep yellow stars */
+  filter: brightness(1.1) contrast(1.05);
   border-radius: 6px;
 }
 
@@ -84,7 +89,7 @@ body {
   font-family: var(--font-sans);
   font-weight: 700;
   font-size: 1.35rem;
-  color: #fff;
+  color: #ffffff; /* White text like main site */
   letter-spacing: 0.2px;
 }
 
@@ -110,7 +115,7 @@ body {
   left: 0;
   width: 0%;
   height: 2px;
-  background: var(--brand);
+  background: #FFCC00;
   transition: width 0.25s ease;
 }
 
@@ -208,22 +213,55 @@ body {
   }
 }
 
-/* FOOTER */
+/* FOOTER - DARKER EU BLUE THEME */
 .footer {
-  border-top: 1px solid #1a1d24;
-  background: #0a0c11;
+  background: #001a4d; /* Dark navy blue like header */
+  border-top: 2px solid #FFCC00;
+  padding: 2.5rem 1rem;
+  text-align: center;
+  color: #c5d0e3;
+  margin-top: auto;
 }
 
 .footer-inner {
-  max-width: 1100px;
+  max-width: 900px;
   margin: 0 auto;
-  padding: 1.25rem;
-  color: var(--muted);
-  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
 }
 
-.small {
-  font-size: 0.9rem;
+.footer-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #ffffff; /* White like main site */
+  margin-bottom: 0.5rem;
+}
+
+.footer-text {
+  color: #f5f7fa;
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.footer-subtext {
+  color: #c5d0e3;
+  font-size: 0.85rem;
+  max-width: 500px;
+  line-height: 1.5;
+  margin: 0.25rem auto 0;
+}
+
+.footer a {
+  color: #FFCC00;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.footer a:hover {
+  text-decoration: underline;
+  color: #d9a600;
 }
 
 /* LAYOUT HELPERS */
@@ -253,15 +291,15 @@ body {
 .hero {
   padding: 4rem 0 2rem;
   background: radial-gradient(
-      1200px 400px at 10% -20%,
-      rgba(46, 140, 255, 0.12),
-      transparent 60%
-    ),
-    radial-gradient(
-      1200px 400px at 90% -20%,
-      rgba(46, 140, 255, 0.12),
-      transparent 60%
-    );
+    1200px 400px at 10% -20%,
+    rgba(46, 140, 255, 0.12),
+    transparent 60%
+  ),
+  radial-gradient(
+    1200px 400px at 90% -20%,
+    rgba(46, 140, 255, 0.12),
+    transparent 60%
+  );
   text-align: center;
 }
 
@@ -271,7 +309,6 @@ body {
   color: #fff;
 }
 
-/* headings use slightly tighter tracking and medium-heavy weights for a professional look */
 h1, h2, h3, h4, h5, h6 {
   font-family: var(--font-sans);
   letter-spacing: 0.15px;
@@ -281,7 +318,6 @@ h1, h2, h3, h4, h5, h6 {
 h1 { font-weight: 800; }
 h2 { font-weight: 700; }
 h3 { font-weight: 600; }
-
 
 .lead {
   color: var(--muted);
@@ -449,56 +485,6 @@ textarea:focus {
   color: var(--muted);
 }
 
-/* === FOOTER === */
-.footer {
-  background: #0a0c11;
-  border-top: 1px solid #1b1f28;
-  padding: 2.5rem 1rem;
-  text-align: center;
-  color: var(--muted);
-  margin-top: auto;
-}
-
-.footer-inner {
-  max-width: 900px;
-  margin: 0 auto;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.footer-title {
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: var(--text);
-  margin-bottom: 0.5rem;
-}
-
-.footer-text {
-  color: var(--muted);
-  margin: 0;
-  font-size: 0.95rem;
-}
-
-.footer-subtext {
-  color: var(--muted);
-  font-size: 0.85rem;
-  max-width: 500px;
-  line-height: 1.5;
-  margin: 0.25rem auto 0;
-}
-
-.footer a {
-  color: var(--brand);
-  text-decoration: none;
-  font-weight: 600;
-}
-
-.footer a:hover {
-  text-decoration: underline;
-}
-
 /* COMMITTEE MEMBERS SECTION */
 .committee-members {
   display: grid;
@@ -554,7 +540,7 @@ textarea:focus {
   .committee-members {
     grid-template-columns: 1fr;
   }
-  
+
   .member-card {
     flex-direction: column;
     align-items: center;
@@ -570,4 +556,8 @@ textarea:focus {
 
 .link:hover {
   text-decoration: underline;
+}
+
+.small {
+  font-size: 0.9rem;
 }
