@@ -686,7 +686,7 @@ export default function Dashboard() {
       ) : (
         <>
           <div className="dashboard-summary">
-            <div className="summary-card main-card">
+            <div className={`summary-card main-card ${summary.totalPnLPercent >= 0 ? 'positive' : 'negative'}`}>
               <span className="summary-label">Portfolio Value</span>
               <div className="summary-value large">
                 {formatCurrency(summary.totalValue)}
@@ -699,13 +699,9 @@ export default function Dashboard() {
                 {formatPercent(summary.totalPnLPercent)}
               </div>
             </div>
-            <div className="summary-card">
+            <div className={`summary-card ${summary.totalPnL >= 0 ? 'positive' : 'negative'}`}>
               <span className="summary-label">Total P&L</span>
-              <div
-                className={`summary-value ${
-                  summary.totalPnL >= 0 ? "positive" : "negative"
-                }`}
-              >
+              <div className="summary-value">
                 {formatCurrency(summary.totalPnL)}
               </div>
             </div>

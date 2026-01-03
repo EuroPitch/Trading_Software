@@ -22,14 +22,14 @@
 
 .welcome-subtitle {
   font-size: 16px;
-  color: var(--muted);
+  color: #B8C5D6;
   margin: 0;
 }
 
 .dashboard-logout-button {
-  background: rgba(239, 68, 68, 0.1);
-  border: 1px solid rgba(239, 68, 68, 0.3);
-  color: #ef4444;
+  background: rgba(164, 36, 59, 0.1);
+  border: 1px solid rgba(164, 36, 59, 0.3);
+  color: #A4243B;
   padding: 0.75rem 1.5rem;
   border-radius: 6px;
   font-weight: 500;
@@ -41,12 +41,12 @@
 }
 
 .dashboard-logout-button:hover {
-  background: rgba(239, 68, 68, 0.2);
-  border-color: rgba(239, 68, 68, 0.5);
-  color: #ff6b6b;
+  background: rgba(164, 36, 59, 0.2);
+  border-color: rgba(164, 36, 59, 0.5);
   transform: translateY(-1px);
 }
 
+/* Professional EU-Themed Summary Cards */
 .dashboard-summary {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
@@ -55,69 +55,107 @@
 }
 
 .summary-card {
-  background: var(--panel);
-  border: 1px solid #1b2230;
-  border-radius: 8px;
+  background: linear-gradient(135deg, rgba(0, 24, 69, 0.8) 0%, rgba(0, 40, 85, 0.7) 100%);
+  color: #ffffff;
+  border: 1px solid rgba(201, 169, 97, 0.25);
+  border-radius: 10px;
   padding: 24px;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
 }
 
 .summary-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+  border-color: rgba(201, 169, 97, 0.4);
 }
 
+/* Main Portfolio Card */
 .summary-card.main-card {
   grid-column: span 2;
-  background: linear-gradient(135deg, var(--panel) 0%, rgba(16, 185, 129, 0.1) 100%);
-  border-color: rgba(16, 185, 129, 0.2);
+}
+
+/* Positive Portfolio - Sophisticated Green */
+.summary-card.main-card.positive {
+  background: linear-gradient(135deg, rgba(11, 110, 79, 0.3) 0%, rgba(14, 135, 97, 0.25) 50%, rgba(0, 24, 69, 0.8) 100%);
+  border-color: rgba(11, 110, 79, 0.5);
+  box-shadow: 0 4px 16px rgba(11, 110, 79, 0.2);
+}
+
+/* Negative Portfolio - Sophisticated Red */
+.summary-card.main-card.negative {
+  background: linear-gradient(135deg, rgba(164, 36, 59, 0.3) 0%, rgba(180, 45, 70, 0.25) 50%, rgba(0, 24, 69, 0.8) 100%);
+  border-color: rgba(164, 36, 59, 0.5);
+  box-shadow: 0 4px 16px rgba(164, 36, 59, 0.2);
+}
+
+/* P&L Cards - Subtle coloring */
+.summary-card.positive {
+  background: linear-gradient(135deg, rgba(11, 110, 79, 0.25) 0%, rgba(0, 24, 69, 0.8) 100%);
+  border-color: rgba(11, 110, 79, 0.4);
+}
+
+.summary-card.negative {
+  background: linear-gradient(135deg, rgba(164, 36, 59, 0.25) 0%, rgba(0, 24, 69, 0.8) 100%);
+  border-color: rgba(164, 36, 59, 0.4);
 }
 
 .summary-label {
-  font-size: 14px;
-  color: var(--muted);
+  font-size: 13px;
+  color: #B8C5D6;
   font-weight: 500;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.8px;
+}
+
+.main-card .summary-label,
+.summary-card.positive .summary-label,
+.summary-card.negative .summary-label {
+  color: #FFFFFF;
 }
 
 .summary-value {
   font-size: 24px;
   font-weight: 700;
-  color: var(--text);
+  color: #ffffff;
 }
 
 .summary-value.large {
   font-size: 36px;
   font-weight: 800;
+  color: #ffffff;
 }
 
-.summary-value.positive {
-  color: #10b981;
-}
-
-.summary-value.negative {
-  color: #ef4444;
+.summary-card.positive .summary-value,
+.summary-card.negative .summary-value {
+  color: #ffffff !important;
 }
 
 .summary-change {
   font-size: 16px;
   font-weight: 600;
   margin-top: 4px;
+  color: #ffffff;
 }
 
 .summary-change.positive {
-  color: #10b981;
+  color: #6FCF97;
 }
 
 .summary-change.negative {
-  color: #ef4444;
+  color: #EB5757;
 }
 
+.summary-card.positive .summary-change,
+.summary-card.negative .summary-change {
+  color: #ffffff;
+  opacity: 0.95;
+}
+
+/* Professional Tables */
 .stats-overview {
   margin-top: 40px;
   margin-bottom: 40px;
@@ -131,11 +169,11 @@
 }
 
 .stats-table-container {
-  background: var(--panel);
-  border: 1px solid #1b2230;
-  border-radius: 8px;
+  background: linear-gradient(135deg, rgba(0, 24, 69, 0.8) 0%, rgba(0, 40, 85, 0.7) 100%);
+  border: 1px solid rgba(201, 169, 97, 0.25);
+  border-radius: 10px;
   overflow-x: auto;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
 .stats-table {
@@ -145,27 +183,27 @@
 }
 
 .stats-table thead {
-  background-color: rgba(255, 255, 255, 0.03);
-  border-bottom: 2px solid rgba(255, 255, 255, 0.04);
+  background: linear-gradient(135deg, #002855 0%, #003366 100%);
+  border-bottom: 2px solid rgba(201, 169, 97, 0.4);
 }
 
 .stats-table th {
-  padding: 12px 16px;
+  padding: 14px 16px;
   text-align: left;
   font-weight: 600;
-  color: var(--muted);
+  color: #ffffff;
   text-transform: uppercase;
-  font-size: 12px;
-  letter-spacing: 0.5px;
+  font-size: 11px;
+  letter-spacing: 0.8px;
 }
 
 .stats-table tbody tr {
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid rgba(201, 169, 97, 0.1);
   transition: background-color 0.2s ease;
 }
 
 .stats-table tbody tr:hover {
-  background-color: rgba(255, 255, 255, 0.02);
+  background-color: rgba(0, 40, 85, 0.3);
 }
 
 .stats-table tbody tr:last-child {
@@ -174,7 +212,7 @@
 
 .stats-table td {
   padding: 16px;
-  color: var(--text);
+  color: #E8EDF3 !important;
   vertical-align: middle;
 }
 
@@ -189,7 +227,7 @@
   justify-content: center;
   width: 32px;
   height: 32px;
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(0, 40, 85, 0.4);
   border-radius: 6px;
   flex-shrink: 0;
 }
@@ -197,24 +235,126 @@
 .stat-value {
   font-size: 16px;
   font-weight: 600;
-  color: var(--text);
+  color: #ffffff;
 }
 
 .stat-value.positive {
-  color: #10b981;
+  color: #0B6E4F;
 }
 
 .stat-value.negative {
-  color: #ef4444;
+  color: #A4243B;
 }
 
 .stat-sublabel {
   font-size: 12px;
-  color: var(--muted);
+  color: #B8C5D6;
   font-weight: 400;
   margin-left: 4px;
 }
 
+/* Positions Section */
+.positions-section {
+  margin-top: 40px;
+  margin-bottom: 40px;
+}
+
+.positions-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: #FFFFFF;
+  margin-bottom: 20px;
+}
+
+.positions-table-container {
+  background: linear-gradient(135deg, rgba(0, 24, 69, 0.8) 0%, rgba(0, 40, 85, 0.7) 100%);
+  border: 1px solid rgba(201, 169, 97, 0.25);
+  border-radius: 10px;
+  overflow-x: auto;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.positions-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.positions-table thead {
+  background: linear-gradient(135deg, #002855 0%, #003366 100%);
+  border-bottom: 2px solid rgba(201, 169, 97, 0.4);
+}
+
+.positions-table th {
+  padding: 14px 16px;
+  text-align: left;
+  font-weight: 600;
+  color: #ffffff;
+  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 0.8px;
+}
+
+.positions-table tbody tr {
+  border-bottom: 1px solid rgba(201, 169, 97, 0.1);
+  transition: background-color 0.2s ease;
+}
+
+.positions-table tbody tr:hover {
+  background-color: rgba(0, 40, 85, 0.3);
+}
+
+.positions-table tbody tr:last-child {
+  border-bottom: none;
+}
+
+.positions-table td {
+  padding: 16px;
+  color: #E8EDF3;
+}
+
+.positions-table td.positive {
+  color: #0B6E4F !important;
+  font-weight: 600;
+}
+
+.positions-table td.negative {
+  color: #A4243B !important;
+  font-weight: 600;
+}
+
+.symbol-cell strong {
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.name-cell {
+  color: #B8C5D6;
+}
+
+.position-badge {
+  display: inline-block;
+  padding: 5px 14px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.position-badge.long {
+  background-color: rgba(11, 110, 79, 0.15);
+  color: #0B6E4F;
+  border: 1px solid rgba(11, 110, 79, 0.3);
+}
+
+.position-badge.short {
+  background-color: rgba(164, 36, 59, 0.15);
+  color: #A4243B;
+  border: 1px solid rgba(164, 36, 59, 0.3);
+}
+
+/* Action Cards */
 .dashboard-actions {
   margin-top: 40px;
 }
@@ -233,9 +373,9 @@
 }
 
 .action-card {
-  background: var(--panel);
-  border: 1px solid #1b2230;
-  border-radius: 8px;
+  background: linear-gradient(135deg, rgba(0, 24, 69, 0.8) 0%, rgba(0, 40, 85, 0.7) 100%);
+  border: 1px solid rgba(201, 169, 97, 0.25);
+  border-radius: 10px;
   padding: 24px;
   text-decoration: none;
   color: inherit;
@@ -250,8 +390,8 @@
 
 .action-card:hover {
   transform: translateY(-4px);
-  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
-  border-color: rgba(16, 185, 129, 0.3);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
+  border-color: rgba(201, 169, 97, 0.5);
 }
 
 .action-icon {
@@ -262,13 +402,13 @@
 .action-card h3 {
   font-size: 20px;
   font-weight: 600;
-  color: var(--text);
+  color: #ffffff;
   margin: 0;
 }
 
 .action-card p {
   font-size: 14px;
-  color: var(--muted);
+  color: #B8C5D6;
   margin: 0;
   line-height: 1.5;
 }
@@ -278,13 +418,18 @@
   text-align: center;
   padding: 40px 20px;
   font-size: 16px;
-  color: var(--muted);
+  color: #B8C5D6;
 }
 
 .error {
-  color: #ef4444;
+  color: #A4243B;
 }
 
+.align-right {
+  text-align: right;
+}
+
+/* Responsive */
 @media (max-width: 768px) {
   .dashboard-container {
     padding: 15px;
@@ -316,16 +461,20 @@
     font-size: 28px;
   }
 
-  .stats-table-container {
+  .stats-table-container,
+  .positions-table-container {
     overflow-x: scroll;
   }
 
-  .stats-table {
-    min-width: 400px;
+  .stats-table,
+  .positions-table {
+    min-width: 600px;
   }
 
   .stats-table th,
-  .stats-table td {
+  .stats-table td,
+  .positions-table th,
+  .positions-table td {
     padding: 12px;
     font-size: 13px;
   }
@@ -336,116 +485,5 @@
 
   .action-cards {
     grid-template-columns: 1fr;
-  }
-}
-
-
-
-/* Positions Section Styles */
-.positions-section {
-  margin-top: 40px;
-  margin-bottom: 40px;
-}
-
-.positions-title {
-  font-size: 24px;
-  font-weight: 600;
-  color: #FFFFFF;
-  margin-bottom: 20px;
-}
-
-.positions-table-container {
-  background: var(--panel);
-  border: 1px solid #1b2230;
-  border-radius: 8px;
-  overflow-x: auto;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-}
-
-.positions-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 14px;
-}
-
-.positions-table thead {
-  background-color: rgba(255,255,255,0.03);
-  border-bottom: 2px solid rgba(255,255,255,0.04);
-}
-
-.positions-table th {
-  padding: 12px 16px;
-  text-align: left;
-  font-weight: 600;
-  color: var(--muted);
-  text-transform: uppercase;
-  font-size: 12px;
-  letter-spacing: 0.5px;
-}
-
-.positions-table tbody tr {
-  border-bottom: 1px solid rgba(255,255,255,0.04);
-  transition: background-color 0.2s ease;
-}
-
-.positions-table tbody tr:hover {
-  background-color: rgba(255,255,255,0.02);
-}
-
-.positions-table tbody tr:last-child {
-  border-bottom: none;
-}
-
-.positions-table td {
-  padding: 16px;
-  color: var(--text);
-}
-
-.symbol-cell strong {
-  font-weight: 600;
-  color: var(--text);
-}
-
-.name-cell {
-  color: var(--muted);
-}
-
-.position-badge {
-  display: inline-block;
-  padding: 4px 12px;
-  border-radius: 12px;
-  font-size: 12px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.position-badge.long {
-  background-color: #d1fae5;
-  color: #065f46;
-}
-
-.position-badge.short {
-  background-color: #fee2e2;
-  color: #991b1b;
-}
-
-.align-right {
-  text-align: right;
-}
-
-@media (max-width: 768px) {
-  .positions-table-container {
-    overflow-x: scroll;
-  }
-
-  .positions-table {
-    min-width: 900px;
-  }
-
-  .positions-table th,
-  .positions-table td {
-    padding: 12px;
-    font-size: 13px;
   }
 }
