@@ -313,13 +313,17 @@ export default function Standings() {
         </div>
         <div className="footer-stat">
           <span className="footer-label">Avg Return %</span>
-          <span className="footer-value">
-            {standings.length > 0
+          <span className={`footer-value ${
+            standings.length > 0 && 
+            (standings.reduce((sum, s) => sum + s.returnPercent, 0) / standings.length) >= 0 
+              ? 'positive' 
+              : 'negative'
+          }`}>
+            {standings.length > 0 
               ? formatPercent(
-                  standings.reduce((sum, s) => sum + s.returnPercent, 0) /
-                    standings.length
+                  standings.reduce((sum, s) => sum + s.returnPercent, 0) / standings.length
                 )
-              : "—"}
+              : '0.00%'}
           </span>
         </div>
         <div className="footer-stat">

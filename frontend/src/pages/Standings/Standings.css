@@ -1,3 +1,5 @@
+/* Standings Page - Professional EU Theme with ORIGINAL Podium Colors */
+
 .standings-container {
   max-width: 1600px;
   margin: 0 auto;
@@ -11,7 +13,7 @@
   align-items: center;
   height: 400px;
   font-size: 16px;
-  color: var(--muted);
+  color: #B8C5D6;
 }
 
 /* Header */
@@ -25,25 +27,25 @@
 }
 
 .header-content h1 {
-  font-size: 28px;
+  font-size: 32px;
   font-weight: 700;
-  color: #ffffff; /* darker for visibility */
+  color: #FFFFFF;
   margin: 0 0 8px 0;
 }
 
 .header-subtitle {
   font-size: 15px;
-  color: #374151; /* visible muted color */
+  color: #B8C5D6;
   margin: 0;
 }
 
 .timeframe-selector {
   display: flex;
   gap: 8px;
-  background: var(--panel);
-  padding: 4px;
+  background: rgba(0, 40, 85, 0.4);
+  padding: 6px;
   border-radius: 8px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(201, 169, 97, 0.2);
 }
 
 .timeframe-btn {
@@ -53,30 +55,31 @@
   border-radius: 6px;
   font-size: 14px;
   font-weight: 500;
-  color: var(--muted);
+  color: #B8C5D6;
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .timeframe-btn:hover {
-  background: rgba(255,255,255,0.02);
-  color: var(--text);
+  background: rgba(0, 40, 85, 0.6);
+  color: #FFFFFF;
 }
 
 .timeframe-btn.active {
-  background: var(--brand);
+  background: linear-gradient(135deg, #002855 0%, #003366 100%);
   color: white;
+  box-shadow: 0 2px 8px rgba(0, 40, 85, 0.4);
 }
 
-/* Podium Section */
+/* Podium Section - ORIGINAL GOLD/SILVER/BRONZE COLORS */
 .podium-section {
   margin-bottom: 32px;
 }
 
 .podium-section h2 {
-  font-size: 20px;
+  font-size: 24px;
   font-weight: 600;
-  color: var(--text);
+  color: #FFFFFF;
   margin-bottom: 20px;
 }
 
@@ -87,73 +90,49 @@
 }
 
 .podium-card {
-  background: var(--panel);
+  background: linear-gradient(135deg, rgba(0, 24, 69, 0.8) 0%, rgba(0, 40, 85, 0.7) 100%);
   border-radius: 12px;
-  padding: 24px;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  padding: 28px 24px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
   border: 2px solid transparent;
   transition: all 0.2s;
 }
 
 .podium-card:hover {
   transform: translateY(-4px);
-  box-shadow: 0 14px 28px -6px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.4);
 }
 
+/* 🥇 GOLD - 1st Place */
 .podium-card.rank-1 {
   border-color: #fbbf24;
-  background: linear-gradient(135deg, #2b2107 0%, var(--panel) 100%);
+  background: linear-gradient(135deg, rgba(251, 191, 36, 0.15) 0%, rgba(0, 24, 69, 0.9) 100%);
+  box-shadow: 0 4px 20px rgba(251, 191, 36, 0.3);
 }
 
+/* 🥈 SILVER - 2nd Place */
 .podium-card.rank-2 {
-  border-color: #9ca3af;
-  background: linear-gradient(135deg, #111317 0%, var(--panel) 100%);
+  border-color: #d1d5db;
+  background: linear-gradient(135deg, rgba(209, 213, 219, 0.12) 0%, rgba(0, 24, 69, 0.9) 100%);
+  box-shadow: 0 4px 20px rgba(209, 213, 219, 0.2);
 }
 
+/* 🥉 BRONZE - 3rd Place */
 .podium-card.rank-3 {
   border-color: #cd7f32;
-  background: linear-gradient(135deg, #2b1708 0%, var(--panel) 100%);
-}
-
-.podium-card:not(.rank-1):not(.rank-2):not(.rank-3) {
-  color: #1a2332;
-}
-
-.podium-card:not(.rank-1):not(.rank-2):not(.rank-3) .podium-user h3 {
-  color: #003399; /* EU blue for names */
-}
-
-/* Ensure text is legible on dark gradient podium cards */
-.podium-card.rank-1,
-.podium-card.rank-2,
-.podium-card.rank-3 {
-  color: #ffffff;
-}
-.podium-card.rank-1 .podium-user h3,
-.podium-card.rank-2 .podium-user h3,
-.podium-card.rank-3 .podium-user h3 {
-  color: #ffffff;
-  text-shadow: 0 1px 0 rgba(0,0,0,0.45);
-}
-.podium-card.rank-1 .podium-username,
-.podium-card.rank-2 .podium-username,
-.podium-card.rank-3 .podium-username {
-  color: rgba(255,255,255,0.85);
-}
-.podium-card.rank-1 .podium-stat,
-.podium-card.rank-2 .podium-stat,
-.podium-card.rank-3 .podium-stat {
-  border-bottom: 1px solid rgba(255,255,255,0.08);
+  background: linear-gradient(135deg, rgba(205, 127, 50, 0.15) 0%, rgba(0, 24, 69, 0.9) 100%);
+  box-shadow: 0 4px 20px rgba(205, 127, 50, 0.3);
 }
 
 .podium-card.current-user {
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.3);
+  box-shadow: 0 0 0 3px rgba(201, 169, 97, 0.4);
 }
 
 .podium-rank {
-  font-size: 48px;
+  font-size: 52px;
   text-align: center;
   margin-bottom: 16px;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
 .podium-user {
@@ -165,7 +144,7 @@
   width: 64px;
   height: 64px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #2563eb 0%, #9333ea 100%);
+  background: linear-gradient(135deg, #002855 0%, #003366 100%);
   color: white;
   display: flex;
   align-items: center;
@@ -173,19 +152,15 @@
   font-size: 28px;
   font-weight: 700;
   margin: 0 auto 12px;
+  border: 2px solid rgba(201, 169, 97, 0.3);
 }
 
 .podium-user h3 {
-  font-size: 18px;
-  font-weight: 600;
-  color: #0b1220;
-  margin: 0 0 4px 0;
-}
-
-.podium-username {
-  font-size: 14px;
-  color: #6b7280;
+  font-size: 20px;
+  font-weight: 700;
+  color: #FFFFFF;
   margin: 0;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
 .podium-stats {
@@ -198,8 +173,8 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 8px 0;
-  border-bottom: 1px solid rgba(255,255,255,0.04);
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(201, 169, 97, 0.1);
 }
 
 .podium-stat:last-child {
@@ -207,88 +182,39 @@
 }
 
 .podium-stat.highlight {
-  background: rgba(255,255,255,0.02);
-  padding: 12px;
-  border-radius: 6px;
-  border: none;
+  background: rgba(201, 169, 97, 0.08);
+  padding: 14px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(201, 169, 97, 0.2);
 }
 
 .stat-label {
   font-size: 13px;
-  color: #4b5563;
+  color: #B8C5D6;
   font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .stat-value {
   font-size: 15px;
   font-weight: 600;
-  color: #cdcfd5;
+  color: #FFFFFF;
 }
 
 .stat-value-large {
-  font-size: 24px;
+  font-size: 26px;
   font-weight: 700;
+  color: #FFFFFF;
 }
 
-/* Your Position Card */
-.your-position-card {
-  background: linear-gradient(135deg, #2563eb 0%, #7c3aed 100%);
-  border-radius: 12px;
-  padding: 24px;
-  margin-bottom: 32px;
-  color: white;
-  box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.3);
+/* POSITIVE/NEGATIVE Colors - FIXED */
+.positive {
+  color: #0B6E4F !important;
 }
 
-.position-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-}
-
-.position-header h3 {
-  font-size: 18px;
-  font-weight: 600;
-  margin: 0;
-}
-
-.position-header .rank-badge {
-  background: rgba(255, 255, 255, 0.2);
-  color: white;
-  font-size: 18px;
-  font-weight: 700;
-}
-
-.position-stats {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 20px;
-}
-
-.position-stat {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.position-stat .stat-label {
-  color: rgba(255, 255, 255, 0.9);
-  font-size: 13px;
-}
-
-.position-stat .stat-value {
-  color: white;
-  font-size: 20px;
-  font-weight: 700;
-}
-
-.position-stat .stat-value.positive {
-  color: #86efac;
-}
-
-.position-stat .stat-value.negative {
-  color: #fca5a5;
+.negative {
+  color: #A4243B !important;
 }
 
 /* Standings Table */
@@ -297,17 +223,18 @@
 }
 
 .standings-table-section h2 {
-  font-size: 20px;
+  font-size: 24px;
   font-weight: 600;
-  color: #0b1220;
+  color: #FFFFFF;
   margin-bottom: 20px;
 }
 
 .table-wrapper {
-  background: #ffffff;
+  background: linear-gradient(135deg, rgba(0, 24, 69, 0.8) 0%, rgba(0, 40, 85, 0.7) 100%);
+  border: 1px solid rgba(201, 169, 97, 0.25);
   border-radius: 12px;
   overflow: hidden;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
 .standings-table {
@@ -317,28 +244,28 @@
 }
 
 .standings-table thead {
-  background: #f3f4f6;
-  border-bottom: 2px solid #e5e7eb;
+  background: linear-gradient(135deg, #002855 0%, #003366 100%);
+  border-bottom: 2px solid rgba(201, 169, 97, 0.4);
 }
 
 .standings-table th {
   padding: 14px 16px;
   text-align: left;
   font-weight: 600;
-  color: #6b7280;
+  color: #FFFFFF;
   text-transform: uppercase;
   font-size: 11px;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.8px;
   white-space: nowrap;
 }
 
 .standings-table tbody tr {
-  border-bottom: 1px solid #e5e7eb;
-  transition: background-color 0.15s;
+  border-bottom: 1px solid rgba(201, 169, 97, 0.1);
+  transition: all 0.2s;
 }
 
 .standings-table tbody tr:hover {
-  background-color: rgba(255,255,255,0.02);
+  background-color: rgba(0, 40, 85, 0.3);
 }
 
 .standings-table tbody tr:last-child {
@@ -346,61 +273,35 @@
 }
 
 .standings-row.current-user-row {
-  background: rgba(46,140,255,0.08);
-  font-weight: 600;
+  background: rgba(201, 169, 97, 0.12);
+  border: 1px solid rgba(201, 169, 97, 0.3);
 }
 
 .standings-row.current-user-row:hover {
-  background: rgba(46,140,255,0.12);
+  background: rgba(201, 169, 97, 0.18);
 }
 
 .standings-table td {
   padding: 16px;
-  /* Force table text to be dark on the white table background so stats remain legible
-     (some podium styles set color:white within their cards which could cascade in
-     specific layouts). We scope color to the table to avoid changing podium text. */
-  color: #111827;
+  color: #E8EDF3;
   white-space: nowrap;
-}
-
-/* Table-specific value styles (scoped) to avoid collisions with podium stat classes */
-.standings-table .stat-value {
-  color: #111827;
-  font-weight: 600;
-}
-.standings-table .positive {
-  color: #059669;
-  font-weight: 600;
-}
-.standings-table .negative {
-  color: #dc2626;
-  font-weight: 600;
+  vertical-align: middle;
 }
 
 .align-right {
   text-align: right;
 }
 
-.positive {
-  color: #059669;
-  font-weight: 600;
-}
-
-.negative {
-  color: #dc2626;
-  font-weight: 600;
-}
-
-/* Rank Badge */
+/* Rank Badge - ORIGINAL COLORS */
 .rank-badge {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   min-width: 36px;
   height: 36px;
-  padding: 0 8px;
-  background: #f3f4f6;
-  color: #374151;
+  padding: 0 10px;
+  background: rgba(0, 40, 85, 0.5);
+  color: #FFFFFF;
   font-weight: 700;
   font-size: 14px;
   border-radius: 6px;
@@ -409,16 +310,19 @@
 .rank-badge.gold {
   background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
   color: white;
+  box-shadow: 0 2px 8px rgba(251, 191, 36, 0.4);
 }
 
 .rank-badge.silver {
   background: linear-gradient(135deg, #d1d5db 0%, #9ca3af 100%);
   color: white;
+  box-shadow: 0 2px 8px rgba(209, 213, 219, 0.4);
 }
 
 .rank-badge.bronze {
   background: linear-gradient(135deg, #cd7f32 0%, #b87333 100%);
   color: white;
+  box-shadow: 0 2px 8px rgba(205, 127, 50, 0.4);
 }
 
 /* Trader Cell */
@@ -432,7 +336,7 @@
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #2563eb 0%, #9333ea 100%);
+  background: linear-gradient(135deg, #002855 0%, #003366 100%);
   color: white;
   display: flex;
   align-items: center;
@@ -449,29 +353,25 @@
 }
 
 .trader-info strong {
-  font-size: 14px;
-  color: #0b1220;
+  font-size: 15px;
+  color: #FFFFFF;
+  font-weight: 600;
 }
 
 .trader-username {
   font-size: 12px;
-  color: #4b5563;
+  color: #B8C5D6;
 }
 
 .you-badge {
-  background: #2563eb;
-  color: white;
+  background: #C9A961;
+  color: #001845;
   padding: 4px 10px;
   border-radius: 12px;
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-}
-
-.time-cell {
-  color: #6b7280;
-  font-size: 13px;
 }
 
 /* Stats Footer */
@@ -479,10 +379,11 @@
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 20px;
-  background: #ffffff;
+  background: linear-gradient(135deg, rgba(0, 24, 69, 0.8) 0%, rgba(0, 40, 85, 0.7) 100%);
+  border: 1px solid rgba(201, 169, 97, 0.25);
   padding: 24px;
   border-radius: 12px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
 .footer-stat {
@@ -492,21 +393,25 @@
 }
 
 .footer-label {
-  font-size: 13px;
-  color: #6b7280;
-  font-weight: 500;
+  font-size: 12px;
+  color: #B8C5D6;
+  font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.8px;
 }
 
 .footer-value {
-  font-size: 20px;
+  font-size: 22px;
   font-weight: 700;
-  color: #111827;
+  color: #FFFFFF;
 }
 
 .footer-value.positive {
-  color: #059669;
+  color: #0B6E4F;
+}
+
+.footer-value.negative {
+  color: #A4243B;
 }
 
 /* Responsive */
@@ -514,7 +419,7 @@
   .table-wrapper {
     overflow-x: auto;
   }
-  
+
   .standings-table {
     min-width: 1000px;
   }
@@ -525,25 +430,25 @@
     flex-direction: column;
     align-items: flex-start;
   }
-  
+
   .timeframe-selector {
     width: 100%;
   }
-  
+
   .timeframe-btn {
     flex: 1;
     text-align: center;
   }
-  
+
   .podium-cards {
     grid-template-columns: 1fr;
   }
-  
-  .position-stats {
-    grid-template-columns: 1fr;
-  }
-  
+
   .stats-footer {
     grid-template-columns: 1fr;
+  }
+
+  .header-content h1 {
+    font-size: 26px;
   }
 }
