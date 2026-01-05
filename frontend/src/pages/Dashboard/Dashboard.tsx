@@ -4,7 +4,6 @@ import "./Dashboard.css";
 import { supabase } from "../../supabaseClient";
 import { useAuth } from "../../context/AuthContext";
 
-
 type PortfolioSummary = {
   totalValue: number;
   totalPnL: number;
@@ -13,7 +12,6 @@ type PortfolioSummary = {
   initialCapital: number;
   positionCount: number;
 };
-
 
 type TradingStats = {
   totalTrades: number;
@@ -28,6 +26,13 @@ type TradingStats = {
   totalNotional: number;
 };
 
+type RiskMetrics = {
+  sharpeRatio: number;
+  volatility: number;
+  maxDrawdown: number;
+  var95: number;
+  beta: number;
+};
 
 type Position = {
   symbol: string;
@@ -42,6 +47,11 @@ type Position = {
   priceStale?: boolean;
 };
 
+type PortfolioSnapshot = {
+  timestamp: Date;
+  totalEquity: number;
+  dailyReturn: number;
+};
 
 export default function Dashboard() {
   const { session, loading: authLoading } = useAuth();
@@ -50,7 +60,7 @@ export default function Dashboard() {
   const isFetchingPricesRef = useRef(false);
   const hasInitializedRef = useRef(false);
   const lastKnownPricesRef = useRef<Map<string, number>>(new Map());
-
+  const portfolioSnapshotsRef = useRef<PortfolioSnapshot[]>([]);
 
   const [positions, setPositions] = useState<Position[]>([]);
   const [priceMap, setPriceMap] = useState<Map<string, number>>(new Map());
@@ -78,8 +88,14 @@ export default function Dashboard() {
     tradesThisWeek: 0,
     totalNotional: 0,
   });
+  const [riskMetrics, setRiskMetrics] = useState<RiskMetrics>({
+    sharpeRatio: 0,
+    volatility: 0,
+    maxDrawdown: 0,
+    var95: 0,
+    beta: 0,
+  });
   const [societyName, setSocietyName] = useState("Society");
-
 
   const handleLogout = async () => {
     try {
@@ -92,19 +108,15 @@ export default function Dashboard() {
     }
   };
 
-
   const formatCurrency = (value: number) =>
     new Intl.NumberFormat("en-UK", { style: "currency", currency: "EUR" }).format(value);
 
-
   const formatPercent = (value: number) => `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
-
 
   const calculatePnL = useCallback((position: Position, currentPrice: number): number => {
     if (currentPrice === 0 || position.entryPrice === 0 || position.quantity === 0) {
       return 0;
     }
-
 
     const quantity = Math.abs(position.quantity);
     if (position.positionType === "LONG") {
@@ -114,36 +126,29 @@ export default function Dashboard() {
     }
   }, []);
 
-
   const fetchPrices = useCallback(async (symbols: string[]): Promise<Map<string, number>> => {
     if (isFetchingPricesRef.current) {
       console.log("⏭️ Skipping price fetch - already in progress");
       return new Map();
     }
 
-
     const priceMap = new Map<string, number>();
     if (symbols.length === 0) return priceMap;
-
 
     isFetchingPricesRef.current = true;
     try {
       const symbolParams = symbols.map((s) => `symbols=${s}`).join("&");
       console.log(`🔄 Fetching prices for: ${symbols.join(", ")}`);
 
-
       const priceResponse = await fetch(
         `https://trading-software.onrender.com/equities/quotes?${symbolParams}&chunk_size=50`,
         { signal: AbortSignal.timeout(10000) }
       );
 
-
       if (priceResponse.ok) {
         const priceData = await priceResponse.json();
         console.log("📦 API Response:", JSON.stringify(priceData, null, 2));
 
-
-        // Handle nested structure with "data" wrapper
         if (priceData.data && typeof priceData.data === "object") {
           Object.entries(priceData.data).forEach(([symbol, stockData]: [string, any]) => {
             const price = Number(stockData?.price ?? 0);
@@ -152,9 +157,7 @@ export default function Dashboard() {
               lastKnownPricesRef.current.set(symbol.toUpperCase().trim(), price);
             }
           });
-        }
-        // Fallback: array format
-        else if (Array.isArray(priceData)) {
+        } else if (Array.isArray(priceData)) {
           priceData.forEach((item: any) => {
             const symbol = (item.symbol ?? item.ticker ?? "").toUpperCase().trim();
             const price = Number(item.price ?? item.last ?? item.close ?? item.current ?? 0);
@@ -163,9 +166,7 @@ export default function Dashboard() {
               lastKnownPricesRef.current.set(symbol, price);
             }
           });
-        }
-        // Fallback: direct object format
-        else if (typeof priceData === "object") {
+        } else if (typeof priceData === "object") {
           Object.entries(priceData).forEach(([key, data]: [string, any]) => {
             if (key === "provider" || key === "symbols") return;
             const symbol = key.toUpperCase().trim();
@@ -177,7 +178,6 @@ export default function Dashboard() {
           });
         }
 
-
         console.log(`✅ Successfully fetched ${priceMap.size} prices`);
       } else {
         console.error(`❌ API returned status ${priceResponse.status}`);
@@ -188,16 +188,13 @@ export default function Dashboard() {
       isFetchingPricesRef.current = false;
     }
 
-
     return priceMap;
   }, []);
-
 
   const calculatePnLForDisplay = useCallback((position: Position) => {
     const currentPrice = priceMap.get(position.symbol.toUpperCase().trim()) ?? position.currentPrice;
     return calculatePnL(position, currentPrice);
   }, [priceMap, calculatePnL]);
-
 
   const calculatePnLPercent = useCallback((position: Position) => {
     const pnl = calculatePnLForDisplay(position);
@@ -206,13 +203,96 @@ export default function Dashboard() {
     return (pnl / costBasis) * 100;
   }, [calculatePnLForDisplay]);
 
+  // Calculate risk metrics from portfolio snapshots with HOURLY data
+  const calculateRiskMetrics = useCallback((snapshots: PortfolioSnapshot[], currentEquity: number, initCapital: number) => {
+    if (snapshots.length < 2) {
+      setRiskMetrics({
+        sharpeRatio: 0,
+        volatility: 0,
+        maxDrawdown: 0,
+        var95: 0,
+        beta: 0,
+      });
+      return;
+    }
 
-  // Sync portfolio to database
-  const syncPortfolioToDatabase = useCallback(async (userId: string, totalEquity: number, realizedPnL: number) => {
+    const returns: number[] = [];
+    for (let i = 1; i < snapshots.length; i++) {
+      const prevEquity = snapshots[i - 1].totalEquity;
+      const currEquity = snapshots[i].totalEquity;
+      if (prevEquity > 0) {
+        returns.push((currEquity - prevEquity) / prevEquity);
+      }
+    }
+
+    if (returns.length === 0) {
+      setRiskMetrics({
+        sharpeRatio: 0,
+        volatility: 0,
+        maxDrawdown: 0,
+        var95: 0,
+        beta: 0,
+      });
+      return;
+    }
+
+    // Mean return
+    const meanReturn = returns.reduce((sum, r) => sum + r, 0) / returns.length;
+
+    // Standard deviation
+    const variance = returns.reduce((sum, r) => sum + Math.pow(r - meanReturn, 2), 0) / returns.length;
+    const stdDev = Math.sqrt(variance);
+
+    // Sharpe Ratio - HOURLY calculation (252 trading days * 6.5 hours = ~1638 trading hours/year)
+    const tradingHoursPerYear: number = 252 * 6.5;
+    const hourlyRiskFreeRate: number = 0.04 / tradingHoursPerYear; // 4% annual risk-free rate
+    const sharpe = stdDev === 0 ? 0 : ((meanReturn - hourlyRiskFreeRate) / stdDev) * Math.sqrt(tradingHoursPerYear);
+
+    // Annualized volatility - HOURLY calculation
+    const annualizedVol = stdDev * Math.sqrt(tradingHoursPerYear) * 100;
+
+    // VaR at 95% confidence (5th percentile)
+    const sortedReturns = [...returns].sort((a, b) => a - b);
+    const varIndex = Math.max(0, Math.floor(returns.length * 0.05));
+    const var95Hourly = sortedReturns[varIndex] || 0;
+    const var95Amount = currentEquity * Math.abs(var95Hourly);
+
+    // Maximum Drawdown
+    let peak = snapshots[0].totalEquity;
+    let maxDD = 0;
+
+    for (const snapshot of snapshots) {
+      const equity = snapshot.totalEquity;
+      if (equity > peak) {
+        peak = equity;
+      }
+      const drawdown = (peak - equity) / peak;
+      if (drawdown > maxDD) {
+        maxDD = drawdown;
+      }
+    }
+
+    // Simple beta calculation
+    const marketReturn: number = 0.0008;
+    const covariance = returns.reduce((sum, r) => sum + (r - meanReturn) * (marketReturn - marketReturn), 0) / returns.length;
+    const marketVariance: number = 0.01;
+    const beta = marketVariance === 0 ? 1 : covariance / marketVariance;
+
+    setRiskMetrics({
+      sharpeRatio: sharpe,
+      volatility: annualizedVol,
+      maxDrawdown: maxDD * 100,
+      var95: var95Amount,
+      beta: Math.abs(beta) < 0.01 ? 1 : beta,
+    });
+  }, []);
+
+  // Sync portfolio to database and save HOURLY snapshot
+  const syncPortfolioToDatabase = useCallback(async (userId: string, totalEquity: number, realizedPnL: number, initCapital: number) => {
     try {
       const { error } = await supabase
         .from('profiles')
-        .update({ 
+        .update({
           total_equity: totalEquity,
           realized_pnl: realizedPnL
         })
@@ -223,11 +303,48 @@ export default function Dashboard() {
       } else {
         console.log('✅ Portfolio synced to DB - Total Equity:', totalEquity, 'Realized P&L:', realizedPnL);
       }
+
+      // Check for snapshot in the last hour (not just today)
+      const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+      const { data: recentSnapshot } = await supabase
+        .from('portfolio_snapshots')
+        .select('id, timestamp')
+        .eq('profile_id', userId)
+        .gte('timestamp', oneHourAgo)
+        .order('timestamp', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (!recentSnapshot) {
+        // Get most recent snapshot to calculate return
+        const { data: lastSnapshot } = await supabase
+          .from('portfolio_snapshots')
+          .select('total_equity')
+          .eq('profile_id', userId)
+          .order('timestamp', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        const previousEquity = lastSnapshot?.total_equity ?? initCapital;
+        const periodReturn = previousEquity > 0 ? (totalEquity - previousEquity) / previousEquity : 0;
+
+        await supabase.from('portfolio_snapshots').insert({
+          profile_id: userId,
+          timestamp: new Date().toISOString(),
+          total_equity: totalEquity,
+          cash_balance: cashBalance,
+          total_pnl: realizedPnL,
+          daily_return: periodReturn,
+        });
+
+        console.log('✅ Hourly portfolio snapshot saved');
+      } else {
+        console.log('⏭️ Snapshot already exists within the last hour, skipping');
+      }
     } catch (err) {
       console.error('❌ Error syncing portfolio:', err);
     }
-  }, []);
-
+  }, [cashBalance]);
 
   useEffect(() => {
     if (hasInitializedRef.current) {
@@ -235,12 +352,10 @@ export default function Dashboard() {
       return;
     }
 
-
     const fetchDashboardData = async () => {
       console.log("🚀 Initializing dashboard...");
       setLoading(true);
       setError(null);
-
 
       try {
         const userId = session?.user?.id;
@@ -249,13 +364,10 @@ export default function Dashboard() {
           return;
         }
 
-
         hasInitializedRef.current = true;
-
 
         let initialCapital = 100000;
         let fetchedSocietyName = "Society";
-
 
         try {
           const { data: profileData } = await supabase
@@ -264,10 +376,10 @@ export default function Dashboard() {
             .eq("id", userId)
             .single();
 
-
           if (profileData?.initial_capital) {
             initialCapital = Number(profileData.initial_capital);
           }
+
           if (profileData?.society_name) {
             fetchedSocietyName = profileData.society_name;
             setSocietyName(fetchedSocietyName);
@@ -276,6 +388,26 @@ export default function Dashboard() {
           console.warn("Could not fetch profile data, using defaults");
         }
 
+        // Fetch historical snapshots for risk calculations (last 90 days)
+        try {
+          const { data: snapshotsData } = await supabase
+            .from('portfolio_snapshots')
+            .select('*')
+            .eq('profile_id', userId)
+            .order('timestamp', { ascending: true })
+            .limit(2000); // ~90 days of hourly data
+
+          if (snapshotsData && snapshotsData.length > 0) {
+            portfolioSnapshotsRef.current = snapshotsData.map((s: any) => ({
+              timestamp: new Date(s.timestamp),
+              totalEquity: Number(s.total_equity),
+              dailyReturn: Number(s.daily_return ?? 0),
+            }));
+            console.log(`📊 Loaded ${portfolioSnapshotsRef.current.length} historical snapshots`);
+          }
+        } catch (err) {
+          console.warn("Could not fetch portfolio snapshots, risk metrics will be limited");
+        }
 
         const { data: tradesData, error: fetchError } = await supabase
           .from("trades")
@@ -283,25 +415,19 @@ export default function Dashboard() {
           .eq("profile_id", userId)
           .order("placed_at", { ascending: true });
 
-
         if (fetchError) throw fetchError;
-
 
         const trades = tradesData ?? [];
         const symbolNameMap = new Map<string, string>();
 
-
-        // Calculate cash balance from trades
         let totalCostBasis = 0;
         let totalProceeds = 0;
-
 
         trades.forEach((trade: any) => {
           const side = (trade.side ?? "buy").toLowerCase();
           const quantity = Number(trade.quantity ?? 0);
           const price = Number(trade.price ?? 0);
           const notional = Number(trade.notional ?? quantity * price);
-
 
           if (side === "buy") {
             totalCostBasis += notional;
@@ -310,13 +436,9 @@ export default function Dashboard() {
           }
         });
 
-
         const calculatedCashBalance = initialCapital - totalCostBasis + totalProceeds;
 
-
-        // Build positions map
         const positionsMap = new Map<string, any>();
-
 
         trades.forEach((trade: any) => {
           const symbol = (trade.symbol ?? "").toUpperCase().trim();
@@ -325,11 +447,9 @@ export default function Dashboard() {
           const price = Number(trade.price ?? 0);
           const notional = Number(trade.notional ?? quantity * price);
 
-
           if (trade.name) {
             symbolNameMap.set(symbol, trade.name);
           }
-
 
           if (!positionsMap.has(symbol)) {
             positionsMap.set(symbol, {
@@ -341,9 +461,7 @@ export default function Dashboard() {
             });
           }
 
-
           const position = positionsMap.get(symbol)!;
-
 
           if (side === "buy") {
             position.quantity += quantity;
@@ -351,12 +469,8 @@ export default function Dashboard() {
           } else if (side === "sell") {
             const oldQuantity = position.quantity;
             const oldCostBasis = position.costBasis;
-
-
             position.quantity -= quantity;
 
-
-            // Reducing a long position (staying long)
             if (oldQuantity > 0 && position.quantity >= 0) {
               if (oldQuantity > 0) {
                 const avgCost = oldCostBasis / oldQuantity;
@@ -364,44 +478,30 @@ export default function Dashboard() {
               } else {
                 position.costBasis = 0;
               }
-            }
-            // Flipping from long to short
-            else if (oldQuantity > 0 && position.quantity < 0) {
+            } else if (oldQuantity > 0 && position.quantity < 0) {
               position.costBasis = Math.abs(position.quantity) * price;
-            }
-            // Adding to existing short
-            else if (oldQuantity <= 0) {
+            } else if (oldQuantity <= 0) {
               position.costBasis += notional;
             }
           }
         });
 
-
         const aggregatedPositions = Array.from(positionsMap.values()).filter(
           (pos) => Math.abs(pos.quantity) > 0.0001
         );
 
-
         setInitialCapital(initialCapital);
         setCashBalance(calculatedCashBalance);
 
-
         const symbols = [...new Set(aggregatedPositions.map((p) => p.symbol))];
 
-
-        // Create positions with fallback prices
         const detailedPositions: Position[] = aggregatedPositions.map((pos) => {
           const entryPrice =
             pos.quantity !== 0 ? Math.abs(pos.costBasis) / Math.abs(pos.quantity) : 0;
-
-
           const lastKnownPrice = lastKnownPricesRef.current.get(pos.symbol);
           const currentPrice = lastKnownPrice && lastKnownPrice > 0 ? lastKnownPrice : entryPrice;
           const priceStale = !lastKnownPrice || lastKnownPrice === 0;
-
-
           const marketValue = Math.abs(pos.quantity) * currentPrice;
-
 
           return {
             symbol: pos.symbol,
@@ -417,23 +517,16 @@ export default function Dashboard() {
           };
         });
 
-
         setPositions(detailedPositions);
 
-
-        // Calculate summary
         let totalMarketValue = 0;
-
-
         detailedPositions.forEach((pos) => {
           totalMarketValue += pos.marketValue;
         });
 
-
         const totalEquityCalculated = calculatedCashBalance + totalMarketValue;
         const totalPnLCalculated = totalEquityCalculated - initialCapital;
         const totalReturn = initialCapital === 0 ? 0 : (totalPnLCalculated / initialCapital) * 100;
-
 
         setSummary({
           totalValue: totalEquityCalculated,
@@ -444,8 +537,9 @@ export default function Dashboard() {
           positionCount: detailedPositions.length,
         });
 
+        // Calculate risk metrics
+        calculateRiskMetrics(portfolioSnapshotsRef.current, totalEquityCalculated, initialCapital);
 
-        // Calculate trading stats
         const buyTrades = trades.filter((t: any) => (t.side ?? "buy").toLowerCase() === "buy").length;
         const sellTrades = trades.filter((t: any) => (t.side ?? "sell").toLowerCase() === "sell").length;
         const totalVolume = trades.reduce((sum: number, t: any) => sum + Math.abs(Number(t.quantity ?? 0)), 0);
@@ -455,7 +549,6 @@ export default function Dashboard() {
         );
         const averageTradeSize = trades.length > 0 ? totalNotional / trades.length : 0;
 
-
         const stockCounts = new Map<string, number>();
         trades.forEach((t: any) => {
           const symbol = t.symbol ?? "";
@@ -463,7 +556,6 @@ export default function Dashboard() {
             stockCounts.set(symbol, (stockCounts.get(symbol) ?? 0) + 1);
           }
         });
-
 
         let mostTradedStock = "-";
         let mostTradedCount = 0;
@@ -474,24 +566,20 @@ export default function Dashboard() {
           }
         });
 
-
         const now = new Date();
         const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         const weekAgo = new Date(today);
         weekAgo.setDate(weekAgo.getDate() - 7);
-
 
         const tradesToday = trades.filter((t: any) => {
           const tradeDate = new Date(t.placed_at ?? t.filled_at ?? "");
           return tradeDate >= today;
         }).length;
 
-
         const tradesThisWeek = trades.filter((t: any) => {
           const tradeDate = new Date(t.placed_at ?? t.filled_at ?? "");
           return tradeDate >= weekAgo;
         }).length;
-
 
         setTradingStats({
           totalTrades: trades.length,
@@ -506,14 +594,11 @@ export default function Dashboard() {
           totalNotional,
         });
 
-
-        // Non-blocking price fetch
         console.log("🔄 Fetching initial prices (non-blocking)...");
         if (symbols.length > 0) {
           const prices = await fetchPrices(symbols);
           if (prices.size > 0) {
             setPriceMap(prices);
-
 
             const updatedPositions = detailedPositions.map((pos) => {
               const freshPrice = prices.get(pos.symbol);
@@ -528,23 +613,16 @@ export default function Dashboard() {
               return pos;
             });
 
-
             setPositions(updatedPositions);
 
-
-            // Recalculate summary with fresh prices
             let updatedTotalMarketValue = 0;
-
-
             updatedPositions.forEach((pos) => {
               updatedTotalMarketValue += pos.marketValue;
             });
 
-
             const updatedTotalEquity = calculatedCashBalance + updatedTotalMarketValue;
             const updatedTotalPnLCalc = updatedTotalEquity - initialCapital;
             const updatedTotalReturn = initialCapital === 0 ? 0 : (updatedTotalPnLCalc / initialCapital) * 100;
-
 
             setSummary({
               totalValue: updatedTotalEquity,
@@ -554,15 +632,14 @@ export default function Dashboard() {
               initialCapital,
               positionCount: updatedPositions.length,
             });
+
+            calculateRiskMetrics(portfolioSnapshotsRef.current, updatedTotalEquity, initialCapital);
           }
         }
 
-
-        // Set up price polling interval (30 seconds)
         if (priceIntervalRef.current) {
           clearInterval(priceIntervalRef.current);
         }
-
 
         if (symbols.length > 0) {
           priceIntervalRef.current = setInterval(async () => {
@@ -581,11 +658,9 @@ export default function Dashboard() {
       }
     };
 
-
     if (!authLoading && session?.user?.id) {
       fetchDashboardData();
     }
-
 
     return () => {
       console.log("🧹 Cleaning up dashboard...");
@@ -595,13 +670,10 @@ export default function Dashboard() {
       }
       hasInitializedRef.current = false;
     };
-  }, [session?.user?.id, authLoading, fetchPrices]);
+  }, [session?.user?.id, authLoading, fetchPrices, calculateRiskMetrics]);
 
-
-  // Separate effect to update positions when priceMap changes (from interval)
   useEffect(() => {
     if (positions.length === 0 || priceMap.size === 0) return;
-
 
     const updatedPositions = positions.map((pos) => {
       const freshPrice = priceMap.get(pos.symbol);
@@ -616,28 +688,21 @@ export default function Dashboard() {
       return pos;
     });
 
-
-    // Only update if prices actually changed
-    const hasChanges = updatedPositions.some((pos, idx) => 
+    const hasChanges = updatedPositions.some((pos, idx) =>
       pos.currentPrice !== positions[idx].currentPrice
     );
-
 
     if (hasChanges) {
       setPositions(updatedPositions);
 
-
-      // Recalculate summary
       let totalMarketValue = 0;
       updatedPositions.forEach((pos) => {
         totalMarketValue += pos.marketValue;
       });
 
-
       const totalEquity = cashBalance + totalMarketValue;
       const totalPnL = totalEquity - initialCapital;
       const totalReturn = initialCapital === 0 ? 0 : (totalPnL / initialCapital) * 100;
-
 
       setSummary((prev) => ({
         ...prev,
@@ -646,38 +711,33 @@ export default function Dashboard() {
         totalPnLPercent: totalReturn,
         positionCount: updatedPositions.length,
       }));
+
+      calculateRiskMetrics(portfolioSnapshotsRef.current, totalEquity, initialCapital);
     }
-  }, [priceMap]); // ONLY depend on priceMap, not positions or summary
+  }, [priceMap, cashBalance, initialCapital, calculateRiskMetrics]);
 
-
-  // Sync portfolio to database when summary changes
   useEffect(() => {
     const userId = session?.user?.id;
     if (!userId || summary.totalValue === 0 || loading) return;
 
-
-    // Debounce to avoid excessive DB writes (wait 3 seconds after last change)
     const timeoutId = setTimeout(() => {
-      syncPortfolioToDatabase(userId, summary.totalValue, summary.totalPnL);
+      syncPortfolioToDatabase(userId, summary.totalValue, summary.totalPnL, initialCapital);
     }, 3000);
 
-
     return () => clearTimeout(timeoutId);
-  }, [summary.totalValue, summary.totalPnL, session?.user?.id, loading, syncPortfolioToDatabase]);
-
+  }, [summary.totalValue, summary.totalPnL, session?.user?.id, loading, syncPortfolioToDatabase, initialCapital]);
 
   return (
     <div className="dashboard-container">
       <div className="dashboard-header">
-        <div className="welcome-section">
+        <div>
           <h1>{societyName} Portfolio Dashboard</h1>
-          <p className="welcome-subtitle">{"Here\'s an overview of your trading account"}</p>
+          <p className="subtitle">Here's an overview of your trading account</p>
         </div>
-        <button onClick={handleLogout} className="dashboard-logout-button">
+        <button onClick={handleLogout} className="logout-button">
           Log Out
         </button>
       </div>
-
 
       {loading ? (
         <div className="loading">Loading dashboard...</div>
@@ -685,55 +745,82 @@ export default function Dashboard() {
         <div className="error">{error}</div>
       ) : (
         <>
-          <div className="dashboard-summary">
-            <div className={`summary-card main-card ${summary.totalPnLPercent >= 0 ? 'positive' : 'negative'}`}>
-              <span className="summary-label">Portfolio Value</span>
-              <div className="summary-value large">
-                {formatCurrency(summary.totalValue)}
-              </div>
-              <div
-                className={`summary-change ${
-                  summary.totalPnLPercent >= 0 ? "positive" : "negative"
-                }`}
-              >
+          <div className="stats-grid">
+            <div className={`stat-card highlight ${summary.totalPnLPercent >= 0 ? 'positive' : 'negative'}`}>
+              <div className="stat-label">Portfolio Value</div>
+              <div className="stat-value">{formatCurrency(summary.totalValue)}</div>
+              <div className={`stat-change ${summary.totalPnLPercent >= 0 ? "positive" : "negative"}`}>
                 {formatPercent(summary.totalPnLPercent)}
               </div>
             </div>
-            <div className={`summary-card ${summary.totalPnL >= 0 ? 'positive' : 'negative'}`}>
-              <span className="summary-label">Total P&L</span>
-              <div className="summary-value">
-                {formatCurrency(summary.totalPnL)}
-              </div>
+
+            <div className={`stat-card ${summary.totalPnL >= 0 ? 'positive' : 'negative'}`}>
+              <div className="stat-label">Total P&L</div>
+              <div className="stat-value">{formatCurrency(summary.totalPnL)}</div>
             </div>
-            <div className="summary-card">
-              <span className="summary-label">Cash Balance</span>
-              <div className="summary-value">
-                {formatCurrency(summary.cashBalance)}
-              </div>
+
+            <div className="stat-card">
+              <div className="stat-label">Cash Balance</div>
+              <div className="stat-value">{formatCurrency(summary.cashBalance)}</div>
             </div>
-            <div className="summary-card">
-              <span className="summary-label">Active Positions</span>
-              <div className="summary-value">{summary.positionCount}</div>
+
+            <div className="stat-card">
+              <div className="stat-label">Active Positions</div>
+              <div className="stat-value">{summary.positionCount}</div>
             </div>
           </div>
 
+          <div className="risk-metrics-section">
+            <h2>Risk & Performance Metrics</h2>
+            <div className="stats-grid">
+              <div className="stat-card">
+                <div className="stat-label">Sharpe Ratio</div>
+                <div className="stat-value">{riskMetrics.sharpeRatio.toFixed(2)}</div>
+                <div className="stat-description">
+                  {riskMetrics.sharpeRatio > 1 ? "Excellent" : riskMetrics.sharpeRatio > 0 ? "Good" : "Poor"} risk-adjusted return
+                </div>
+              </div>
+
+              <div className="stat-card">
+                <div className="stat-label">Portfolio Volatility</div>
+                <div className="stat-value">{riskMetrics.volatility.toFixed(2)}%</div>
+                <div className="stat-description">Annualized standard deviation</div>
+              </div>
+
+              <div className="stat-card">
+                <div className={`stat-label ${riskMetrics.maxDrawdown > 20 ? 'warning' : ''}`}>
+                  Max Drawdown
+                </div>
+                <div className={`stat-value ${riskMetrics.maxDrawdown > 20 ? 'negative' : ''}`}>
+                  {riskMetrics.maxDrawdown.toFixed(2)}%
+                </div>
+                <div className="stat-description">Worst peak-to-trough decline</div>
+              </div>
+
+              <div className="stat-card">
+                <div className="stat-label">VaR (95%)</div>
+                <div className="stat-value">{formatCurrency(riskMetrics.var95)}</div>
+                <div className="stat-description">Hourly risk at 95% confidence</div>
+              </div>
+            </div>
+          </div>
 
           {positions.length > 0 ? (
             <div className="positions-section">
-              <h2 className="positions-title">Active Positions</h2>
-              <div className="positions-table-container">
+              <h2>Active Positions</h2>
+              <div className="table-container">
                 <table className="positions-table">
                   <thead>
                     <tr>
                       <th>Symbol</th>
                       <th>Name</th>
                       <th>Position</th>
-                      <th className="align-right">Quantity</th>
-                      <th className="align-right">Entry Price</th>
-                      <th className="align-right">Current Price</th>
-                      <th className="align-right">Market Value</th>
-                      <th className="align-right">P&L ($)</th>
-                      <th className="align-right">P&L (%)</th>
+                      <th>Quantity</th>
+                      <th>Entry Price</th>
+                      <th>Current Price</th>
+                      <th>Market Value</th>
+                      <th>P&L ($)</th>
+                      <th>P&L (%)</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -742,49 +829,24 @@ export default function Dashboard() {
                       const pnl = calculatePnLForDisplay(position);
                       const pnlPercent = calculatePnLPercent(position);
 
-
                       return (
-                        <tr key={`${position.symbol}-${idx}`} className="position-row">
-                          <td className="symbol-cell">
-                            <strong>{position.symbol}</strong>
-                          </td>
-                          <td className="name-cell">{position.name}</td>
+                        <tr key={idx}>
+                          <td><strong>{position.symbol}</strong></td>
+                          <td>{position.name}</td>
+                          <td><span className={`position-badge ${position.positionType.toLowerCase()}`}>{position.positionType}</span></td>
+                          <td>{Math.abs(position.quantity).toFixed(2)}</td>
+                          <td>{formatCurrency(position.entryPrice ?? 0)}</td>
                           <td>
-                            <span
-                              className={`position-badge ${position.positionType.toLowerCase()}`}
-                            >
-                              {position.positionType}
-                            </span>
-                          </td>
-                          <td className="align-right">
-                            {Math.abs(position.quantity).toFixed(2)}
-                          </td>
-                          <td className="align-right">
-                            {formatCurrency(position.entryPrice ?? 0)}
-                          </td>
-                          <td className="align-right">
                             {formatCurrency(currentPrice)}
                             {position.priceStale && (
-                              <span style={{fontSize: "0.75em", color: "#999", marginLeft: "4px"}}>
-                                ⚠
-                              </span>
+                              <span className="stale-indicator" title="Price may be stale">⚠</span>
                             )}
                           </td>
-                          <td className="align-right">
-                            {formatCurrency(Math.abs(position.quantity) * currentPrice)}
-                          </td>
-                          <td
-                            className={`align-right ${
-                              pnl >= 0 ? "positive" : "negative"
-                            }`}
-                          >
+                          <td>{formatCurrency(Math.abs(position.quantity) * currentPrice)}</td>
+                          <td className={`pnl-cell ${pnl >= 0 ? "positive" : "negative"}`}>
                             {formatCurrency(pnl)}
                           </td>
-                          <td
-                            className={`align-right ${
-                              pnlPercent >= 0 ? "positive" : "negative"
-                            }`}
-                          >
+                          <td className={`pnl-cell ${pnlPercent >= 0 ? "positive" : "negative"}`}>
                             {formatPercent(pnlPercent)}
                           </td>
                         </tr>
@@ -794,64 +856,78 @@ export default function Dashboard() {
                 </table>
               </div>
               {positions.some(p => p.priceStale) && (
-                <p style={{fontSize: "0.85em", color: "#666", marginTop: "0.5rem", fontStyle: "italic"}}>
+                <div className="stale-price-warning">
                   ⚠ = Price may be stale or unavailable
-                </p>
+                </div>
               )}
             </div>
           ) : (
-            <div className="positions-section">
-              <h2 className="positions-title">Active Positions</h2>
-              <p style={{ textAlign: "center", padding: "2rem", color: "#666" }}>
-                No active positions. Start trading to see your portfolio here.
-              </p>
+            <div className="empty-state">
+              <h2>Active Positions</h2>
+              <p>No active positions. Start trading to see your portfolio here.</p>
             </div>
           )}
 
-
-          <div className="stats-overview">
+          <div className="trading-stats-section">
             <h2>Trading Statistics</h2>
-            <div className="stats-table-container">
-              <table className="stats-table">
-                <thead>
-                  <tr>
-                    <th>Metric</th>
-                    <th className="align-right">Value</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr><td>Total Trades</td><td className="align-right">{tradingStats.totalTrades}</td></tr>
-                  <tr><td>Buy Orders</td><td className="align-right positive">{tradingStats.buyTrades}</td></tr>
-                  <tr><td>Sell Orders</td><td className="align-right negative">{tradingStats.sellTrades}</td></tr>
-                  <tr><td>Total Volume</td><td className="align-right">{tradingStats.totalVolume.toLocaleString()}</td></tr>
-                  <tr><td>Total Notional</td><td className="align-right">{formatCurrency(tradingStats.totalNotional)}</td></tr>
-                  <tr><td>Avg Trade Size</td><td className="align-right">{formatCurrency(tradingStats.averageTradeSize)}</td></tr>
-                  <tr><td>Most Traded Stock</td><td className="align-right">{tradingStats.mostTradedStock} ({tradingStats.mostTradedCount})</td></tr>
-                  <tr><td>Trades Today</td><td className="align-right">{tradingStats.tradesToday}</td></tr>
-                  <tr><td>Trades This Week</td><td className="align-right">{tradingStats.tradesThisWeek}</td></tr>
-                </tbody>
-              </table>
-            </div>
+            <table className="stats-table">
+              <tbody>
+                <tr>
+                  <td>Total Trades</td>
+                  <td><strong>{tradingStats.totalTrades}</strong></td>
+                </tr>
+                <tr>
+                  <td>Buy Orders</td>
+                  <td>{tradingStats.buyTrades}</td>
+                </tr>
+                <tr>
+                  <td>Sell Orders</td>
+                  <td>{tradingStats.sellTrades}</td>
+                </tr>
+                <tr>
+                  <td>Total Volume</td>
+                  <td>{tradingStats.totalVolume.toLocaleString()}</td>
+                </tr>
+                <tr>
+                  <td>Total Notional</td>
+                  <td>{formatCurrency(tradingStats.totalNotional)}</td>
+                </tr>
+                <tr>
+                  <td>Avg Trade Size</td>
+                  <td>{formatCurrency(tradingStats.averageTradeSize)}</td>
+                </tr>
+                <tr>
+                  <td>Most Traded Stock</td>
+                  <td>{tradingStats.mostTradedStock} ({tradingStats.mostTradedCount})</td>
+                </tr>
+                <tr>
+                  <td>Trades Today</td>
+                  <td>{tradingStats.tradesToday}</td>
+                </tr>
+                <tr>
+                  <td>Trades This Week</td>
+                  <td>{tradingStats.tradesThisWeek}</td>
+                </tr>
+              </tbody>
+            </table>
           </div>
 
-
-          <div className="dashboard-actions">
+          <div className="quick-actions">
             <h2>Quick Actions</h2>
-            <div className="action-cards">
-              <Link to="/portfolio" className="action-card">
-                <div className="action-icon">📊</div>
-                <h3>View Portfolio</h3>
+            <div className="actions-grid">
+              <Link to="/standings" className="action-card">
+                <h3>📊 View Portfolio</h3>
                 <p>See all your positions and detailed performance</p>
               </Link>
-              <Link to="/stocks" className="action-card">
-                <div className="action-icon">📈</div>
-                <h3>Browse Stocks</h3>
+
+              <Link to="/stock-metrics" className="action-card">
+                <h3>📈 Browse Stocks</h3>
                 <p>Explore and trade stocks</p>
               </Link>
-              <div className="action-card" style={{ cursor: "default" }}>
-                <div className="action-icon">💰</div>
-                <h3>Initial Capital</h3>
-                <p>{formatCurrency(summary.initialCapital)}</p>
+
+              <div className="stat-card">
+                <div className="stat-label">Initial Capital</div>
+                <div className="stat-value">{formatCurrency(summary.initialCapital)}</div>
               </div>
             </div>
           </div>
