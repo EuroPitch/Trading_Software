@@ -299,3 +299,25 @@
     flex: 1;
   }
 }
+
+/* Make it feel embedded, not full-width */
+.stock-order-modal {
+  background: linear-gradient(135deg, rgba(0, 24, 69, 0.95) 0%, rgba(0, 40, 85, 0.95) 100%);
+  border-radius: 12px;
+  width: 100%; /* Take full width of parent */
+  max-width: none; /* Remove any max-width constraint */
+  overflow-y: auto;
+  box-shadow: none; /* Remove shadow since parent modal has it */
+  border: 1px solid rgba(201, 169, 97, 0.3);
+  margin: 0; /* No margin needed when embedded */
+}
+
+/* Add some breathing room inside the trade tab */
+.stock-order-modal .modal-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: #ffffff;
+  margin: 0;
+  padding: 20px 24px 16px 24px;
+  border-bottom: 1px solid rgba(201, 169, 97, 0.25);
+}

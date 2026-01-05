@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { supabase } from "../../../supabaseClient";
+import "./StockOrderModal.css";
 
 interface TradeFormProps {
   stock: any;
@@ -9,16 +10,11 @@ interface TradeFormProps {
 
 export default function TradeForm({ stock, onExecuteTrade, onClose }: TradeFormProps) {
   const [action, setAction] = useState<"buy" | "sell">("buy");
-  const [orderType, setOrderType] = useState<"market" | "limit">("market");
   const [quantity, setQuantity] = useState(0);
-  const [limitPrice, setLimitPrice] = useState(stock.price);
   const [isProcessing, setIsProcessing] = useState(false);
 
-  const effectivePrice = orderType === "market" ? stock.price : limitPrice;
-  const totalValue = quantity * effectivePrice;
-  const isValidOrder =
-    quantity > 0 &&
-    (orderType === "market" || (orderType === "limit" && limitPrice > 0));
+  const totalValue = quantity * stock.price;
+  const isValidOrder = quantity > 0;
 
   const handleExecute = async () => {
     if (!isValidOrder) return;
@@ -45,10 +41,12 @@ export default function TradeForm({ stock, onExecuteTrade, onClose }: TradeFormP
         {
           profile_id: user.id,
           symbol: stock.symbol,
+          name: stock.name || stock.symbol,
           side: action,
           quantity: quantity,
-          price: effectivePrice,
-          order_type: orderType,
+          price: stock.price,
+          order_type: "market",
+          notional: totalValue,
           placed_at: now,
           filled_at: now,
           created_by: user.id,
@@ -73,7 +71,10 @@ export default function TradeForm({ stock, onExecuteTrade, onClose }: TradeFormP
     alert(
       `${action.toUpperCase()} order executed: ${quantity} shares of ${
         stock.symbol
-      }`
+      } at ${new Intl.NumberFormat("en-UK", {
+        style: "currency",
+        currency: "EUR",
+      }).format(stock.price)}`
     );
 
     if (onClose) {
@@ -82,10 +83,28 @@ export default function TradeForm({ stock, onExecuteTrade, onClose }: TradeFormP
   };
 
   return (
-    <div className="trade-form-content">
-      {/* Action Toggle */}
-      <div className="trade-section">
-        <label className="trade-label">ACTION</label>
+    <div className="stock-order-modal">
+      <h2 className="modal-title">Trade {stock.symbol}</h2>
+
+      <div className="stock-header">
+        <div>
+          <span className="stock-symbol">{stock.symbol}</span>
+          <span className="stock-name">{stock.name || stock.symbol}</span>
+        </div>
+      </div>
+
+      <div className="current-price">
+        <span className="label">Current Price</span>
+        <span className="value">
+          {new Intl.NumberFormat("en-UK", {
+            style: "currency",
+            currency: "EUR",
+          }).format(stock.price)}
+        </span>
+      </div>
+
+      <div className="section">
+        <span className="label">Action</span>
         <div className="action-toggle">
           <button
             className={`toggle-button ${action === "buy" ? "active buy" : ""}`}
@@ -102,80 +121,61 @@ export default function TradeForm({ stock, onExecuteTrade, onClose }: TradeFormP
         </div>
       </div>
 
-      {/* Order Type Toggle */}
-      <div className="trade-section">
-        <label className="trade-label">ORDER TYPE</label>
-        <div className="order-type-toggle">
-          <button
-            className={`toggle-button ${orderType === "market" ? "active" : ""}`}
-            onClick={() => setOrderType("market")}
-          >
-            Market
-          </button>
-          <button
-            className={`toggle-button ${orderType === "limit" ? "active" : ""}`}
-            onClick={() => setOrderType("limit")}
-          >
-            Limit
-          </button>
-        </div>
-      </div>
-
-      {/* Quantity Input */}
-      <div className="trade-section">
-        <label className="trade-label">QUANTITY (SHARES)</label>
+      <div className="section">
+        <label className="label" htmlFor="quantity">
+          Quantity
+        </label>
         <input
+          id="quantity"
           type="number"
-          className="trade-input"
-          value={quantity}
-          onChange={(e) => setQuantity(Number(e.target.value))}
-          placeholder="Enter quantity"
           min="0"
+          step="1"
+          value={quantity || ""}
+          onChange={(e) => setQuantity(Math.max(0, parseInt(e.target.value) || 0))}
+          placeholder="Enter quantity"
+          className="order-input"
         />
       </div>
 
-      {/* Limit Price (conditional) */}
-      {orderType === "limit" && (
-        <div className="trade-section">
-          <label className="trade-label">LIMIT PRICE</label>
-          <input
-            type="number"
-            className="trade-input"
-            value={limitPrice}
-            onChange={(e) => setLimitPrice(Number(e.target.value))}
-            placeholder="Enter limit price"
-            step="0.01"
-            min="0"
-          />
-        </div>
-      )}
-
-      {/* Order Summary */}
-      <div className="trade-summary">
+      <div className="order-summary">
         <div className="summary-row">
-          <span>Shares</span>
-          <span>{quantity}</span>
+          <span className="label">Order Type</span>
+          <span className="value">Market</span>
         </div>
         <div className="summary-row">
-          <span>Price per Share</span>
-          <span>${effectivePrice.toFixed(2)}</span>
+          <span className="label">Execution Price</span>
+          <span className="value">
+            {new Intl.NumberFormat("en-UK", {
+              style: "currency",
+              currency: "EUR",
+            }).format(stock.price)}
+          </span>
         </div>
-        <div className="summary-row total">
-          <span>Total Cost</span>
-          <span>${totalValue.toFixed(2)}</span>
+        <div className="summary-row">
+          <span className="label">Total Value</span>
+          <span className="value">
+            {new Intl.NumberFormat("en-UK", {
+              style: "currency",
+              currency: "EUR",
+            }).format(totalValue)}
+          </span>
         </div>
       </div>
 
-      {/* Execute Button */}
-      <button
-        className={`btn-execute ${action}`}
-        onClick={handleExecute}
-        disabled={!isValidOrder || isProcessing}
-      >
-        {isProcessing
-          ? "PROCESSING..."
-          : `${action.toUpperCase()} ${stock.symbol}`}
-      </button>
+      <div className="modal-actions">
+        <button className="btn cancel" onClick={onClose}>
+          Cancel
+        </button>
+        <button
+          className={`btn execute ${action}`}
+          onClick={handleExecute}
+          disabled={!isValidOrder || isProcessing}
+        >
+          {isProcessing
+            ? "Processing..."
+            : `${action === "buy" ? "Buy" : "Sell"} ${quantity} Shares`}
+        </button>
+      </div>
     </div>
   );
 }
