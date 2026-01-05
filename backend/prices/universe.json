@@ -181,11 +181,60 @@
           "name": "Raytheon Technologies"
         }
       ]
+    },
+    "etfs": {
+      "name": "ETFs",
+      "stocks": [
+        {
+          "ticker": "SPY",
+          "name": "SPDR S&P 500 ETF"
+        },
+        {
+          "ticker": "QQQ",
+          "name": "Invesco QQQ Trust (Nasdaq-100)"
+        },
+        {
+          "ticker": "IWM",
+          "name": "iShares Russell 2000 ETF"
+        },
+        {
+          "ticker": "EEM",
+          "name": "iShares MSCI Emerging Markets ETF"
+        },
+        {
+          "ticker": "GLD",
+          "name": "SPDR Gold Shares"
+        },
+        {
+          "ticker": "TLT",
+          "name": "iShares 20+ Year Treasury Bond ETF"
+        },
+        {
+          "ticker": "XLF",
+          "name": "Financial Select Sector SPDR Fund"
+        },
+        {
+          "ticker": "XLE",
+          "name": "Energy Select Sector SPDR Fund"
+        },
+        {
+          "ticker": "XLK",
+          "name": "Technology Select Sector SPDR Fund"
+        },
+        {
+          "ticker": "XLV",
+          "name": "Health Care Select Sector SPDR Fund"
+        },
+        {
+          "ticker": "VGK",
+          "name": "Vanguard FTSE Europe ETF"
+        }
+      ]
     }
   },
   "metadata": {
-    "total_stocks": 38,
-    "competition_name": "EuroPitch Trading Competition Stock Universe",
-    "last_updated": "2025-12-26"
+    "total_stocks": 49,
+    "competition_name": "EuroPitch Trading Competition Universe",
+    "last_updated": "2026-01-06"
   }
 }
