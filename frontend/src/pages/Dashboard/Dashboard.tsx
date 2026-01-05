@@ -53,6 +53,14 @@ type PortfolioSnapshot = {
   dailyReturn: number;
 };
 
+type CompetitionScore = {
+  returnScore: number;
+  riskScore: number;
+  consistencyScore: number;
+  activityScore: number;
+  totalScore: number;
+};
+
 export default function Dashboard() {
   const { session, loading: authLoading } = useAuth();
   const navigate = useNavigate();
@@ -125,6 +133,14 @@ export default function Dashboard() {
       return (position.entryPrice - currentPrice) * quantity;
     }
   }, []);
+
+  const [competitionScore, setCompetitionScore] = useState<CompetitionScore>({
+    returnScore: 0,
+    riskScore: 0,
+    consistencyScore: 0,
+    activityScore: 0,
+    totalScore: 0,
+  });
 
   const fetchPrices = useCallback(async (symbols: string[]): Promise<Map<string, number>> => {
     if (isFetchingPricesRef.current) {
@@ -285,6 +301,37 @@ export default function Dashboard() {
       var95: var95Amount,
       beta: Math.abs(beta) < 0.01 ? 1 : beta,
     });
+  }, []);
+
+  const calculateCompetitionScore = useCallback((
+    totalReturn: number,
+    sharpe: number,
+    maxDrawdown: number,
+    volatility: number,
+    totalTrades: number,
+    positionCount: number,
+    snapshots: PortfolioSnapshot[]
+  ): CompetitionScore => {
+    const returnScore = Math.max(0, Math.min(100, totalReturn + 50));
+    const sharpeScore = Math.min((Math.max(sharpe, 0) / 3.0) * 50, 50);
+    const drawdownPenalty = Math.min(maxDrawdown, 50) * 0.5;
+    const riskScore = Math.max(0, sharpeScore + (50 - drawdownPenalty));
+    const positiveReturns = snapshots.filter(s => s.dailyReturn > 0).length;
+    const positiveRatio = snapshots.length > 0 ? positiveReturns / snapshots.length : 0;
+    const volatilityPenalty = Math.min(volatility, 100) / 100;
+    const consistencyScore = Math.max(0, Math.min(100, (positiveRatio * 70) + ((1 - volatilityPenalty) * 30)));
+    const tradeScore = Math.min(totalTrades / 30, 1.0) * 50;
+    const diversificationScore = Math.min(positionCount / 8, 1.0) * 30;
+    const activityScore = tradeScore + diversificationScore + 20;
+    const totalScore = (returnScore * 0.40) + (riskScore * 0.30) + (consistencyScore * 0.20) + (activityScore * 0.10);
+    
+    return {
+      returnScore: Math.round(returnScore),
+      riskScore: Math.round(riskScore),
+      consistencyScore: Math.round(consistencyScore),
+      activityScore: Math.round(activityScore),
+      totalScore: Math.round(totalScore),
+    };
   }, []);
 
   // Sync portfolio to database and save HOURLY snapshot
@@ -717,15 +764,61 @@ export default function Dashboard() {
   }, [priceMap, cashBalance, initialCapital, calculateRiskMetrics]);
 
   useEffect(() => {
+    if (summary.totalValue === 0 || loading) return;
+    const score = calculateCompetitionScore(
+      summary.totalPnLPercent,
+      riskMetrics.sharpeRatio,
+      riskMetrics.maxDrawdown,
+      riskMetrics.volatility,
+      tradingStats.totalTrades,
+      summary.positionCount,
+      portfolioSnapshotsRef.current
+    );
+    setCompetitionScore(score);
+  }, [summary.totalPnLPercent, summary.totalValue, riskMetrics, tradingStats.totalTrades, summary.positionCount, loading, calculateCompetitionScore]);
+
+  useEffect(() => {
     const userId = session?.user?.id;
     if (!userId || summary.totalValue === 0 || loading) return;
 
-    const timeoutId = setTimeout(() => {
-      syncPortfolioToDatabase(userId, summary.totalValue, summary.totalPnL, initialCapital);
+    const timeoutId = setTimeout(async () => {
+      // Sync portfolio first
+      await syncPortfolioToDatabase(userId, summary.totalValue, summary.totalPnL, initialCapital);
+      
+      // Then update competition scores
+      try {
+        await supabase
+          .from('profiles')
+          .update({
+            competition_score: competitionScore.totalScore,
+            return_score: competitionScore.returnScore,
+            risk_score: competitionScore.riskScore,
+            consistency_score: competitionScore.consistencyScore,
+            activity_score: competitionScore.activityScore,
+            score_last_updated: new Date().toISOString(),
+          })
+          .eq('id', userId);
+        
+        console.log('✅ Competition scores updated');
+      } catch (err) {
+        console.error('❌ Failed to update scores:', err);
+      }
     }, 3000);
 
     return () => clearTimeout(timeoutId);
-  }, [summary.totalValue, summary.totalPnL, session?.user?.id, loading, syncPortfolioToDatabase, initialCapital]);
+  }, [
+    summary.totalValue,
+    summary.totalPnL,
+    session?.user?.id,
+    loading,
+    syncPortfolioToDatabase,
+    initialCapital,
+    competitionScore.totalScore,
+    competitionScore.returnScore,
+    competitionScore.riskScore,
+    competitionScore.consistencyScore,
+    competitionScore.activityScore
+  ]);
 
   return (
     <div className="dashboard-container">
@@ -770,37 +863,33 @@ export default function Dashboard() {
             </div>
           </div>
 
-          <div className="risk-metrics-section">
-            <h2>Risk & Performance Metrics</h2>
+          <div className="competition-score-section">
+            <h2>Competition Score</h2>
             <div className="stats-grid">
               <div className="stat-card">
-                <div className="stat-label">Sharpe Ratio</div>
-                <div className="stat-value">{riskMetrics.sharpeRatio.toFixed(2)}</div>
-                <div className="stat-description">
-                  {riskMetrics.sharpeRatio > 1 ? "Excellent" : riskMetrics.sharpeRatio > 0 ? "Good" : "Poor"} risk-adjusted return
-                </div>
+                <div className="stat-label">Return Score (40%)</div>
+                <div className="stat-value">{competitionScore.returnScore}</div>
+                <div className="stat-description">Based on total return vs initial capital</div>
               </div>
-
               <div className="stat-card">
-                <div className="stat-label">Portfolio Volatility</div>
-                <div className="stat-value">{riskMetrics.volatility.toFixed(2)}%</div>
-                <div className="stat-description">Annualized standard deviation</div>
+                <div className="stat-label">Risk Score (30%)</div>
+                <div className="stat-value">{competitionScore.riskScore}</div>
+                <div className="stat-description">Sharpe ratio and drawdown management</div>
               </div>
-
               <div className="stat-card">
-                <div className={`stat-label ${riskMetrics.maxDrawdown > 20 ? 'warning' : ''}`}>
-                  Max Drawdown
-                </div>
-                <div className={`stat-value ${riskMetrics.maxDrawdown > 20 ? 'negative' : ''}`}>
-                  {riskMetrics.maxDrawdown.toFixed(2)}%
-                </div>
-                <div className="stat-description">Worst peak-to-trough decline</div>
+                <div className="stat-label">Consistency Score (20%)</div>
+                <div className="stat-value">{competitionScore.consistencyScore}</div>
+                <div className="stat-description">Steady growth and low volatility</div>
               </div>
-
               <div className="stat-card">
-                <div className="stat-label">VaR (95%)</div>
-                <div className="stat-value">{formatCurrency(riskMetrics.var95)}</div>
-                <div className="stat-description">Hourly risk at 95% confidence</div>
+                <div className="stat-label">Activity Score (10%)</div>
+                <div className="stat-value">{competitionScore.activityScore}</div>
+                <div className="stat-description">Trading frequency and diversification</div>
+              </div>
+              <div className="stat-card highlight">
+                <div className="stat-label">Total Competition Score</div>
+                <div className="stat-value">{competitionScore.totalScore}/100</div>
+                <div className="stat-description">Your overall competition ranking score</div>
               </div>
             </div>
           </div>
@@ -868,6 +957,41 @@ export default function Dashboard() {
             </div>
           )}
 
+          <div className="risk-metrics-section">
+            <h2>Risk & Performance Metrics</h2>
+            <div className="stats-grid">
+              <div className="stat-card">
+                <div className="stat-label">Sharpe Ratio</div>
+                <div className="stat-value">{riskMetrics.sharpeRatio.toFixed(2)}</div>
+                <div className="stat-description">
+                  {riskMetrics.sharpeRatio > 1 ? "Excellent" : riskMetrics.sharpeRatio > 0 ? "Good" : "Poor"} risk-adjusted return
+                </div>
+              </div>
+
+              <div className="stat-card">
+                <div className="stat-label">Portfolio Volatility</div>
+                <div className="stat-value">{riskMetrics.volatility.toFixed(2)}%</div>
+                <div className="stat-description">Annualized standard deviation</div>
+              </div>
+
+              <div className="stat-card">
+                <div className={`stat-label ${riskMetrics.maxDrawdown > 20 ? 'warning' : ''}`}>
+                  Max Drawdown
+                </div>
+                <div className={`stat-value ${riskMetrics.maxDrawdown > 20 ? 'negative' : ''}`}>
+                  {riskMetrics.maxDrawdown.toFixed(2)}%
+                </div>
+                <div className="stat-description">Worst peak-to-trough decline</div>
+              </div>
+
+              <div className="stat-card">
+                <div className="stat-label">VaR (95%)</div>
+                <div className="stat-value">{formatCurrency(riskMetrics.var95)}</div>
+                <div className="stat-description">Hourly risk at 95% confidence</div>
+              </div>
+            </div>
+          </div>
+
           <div className="trading-stats-section">
             <h2>Trading Statistics</h2>
             <table className="stats-table">
@@ -915,20 +1039,10 @@ export default function Dashboard() {
           <div className="quick-actions">
             <h2>Quick Actions</h2>
             <div className="actions-grid">
-              <Link to="/standings" className="action-card">
-                <h3>📊 View Portfolio</h3>
-                <p>See all your positions and detailed performance</p>
-              </Link>
-
-              <Link to="/stock-metrics" className="action-card">
-                <h3>📈 Browse Stocks</h3>
+              <Link to="/stocks" className="action-card">
+                <h3>Browse Stocks</h3>
                 <p>Explore and trade stocks</p>
               </Link>
-
-              <div className="stat-card">
-                <div className="stat-label">Initial Capital</div>
-                <div className="stat-value">{formatCurrency(summary.initialCapital)}</div>
-              </div>
             </div>
           </div>
         </>
