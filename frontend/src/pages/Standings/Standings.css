@@ -452,3 +452,179 @@
     font-size: 26px;
   }
 }
+
+/* ==================== PODIUM SECTION ==================== */
+.podium {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 20px;
+  margin: 48px 0;
+  padding: 50px 40px 40px 40px;
+  background: linear-gradient(135deg, rgba(0, 24, 69, 0.7) 0%, rgba(0, 40, 85, 0.6) 100%);
+  border-radius: 16px;
+  border: 1px solid rgba(201, 169, 97, 0.3);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+
+.podium-place {
+  background: linear-gradient(135deg, rgba(0, 24, 69, 0.9) 0%, rgba(0, 40, 85, 0.8) 100%);
+  border-radius: 12px;
+  padding: 28px 24px;
+  text-align: center;
+  border: 2px solid transparent;
+  transition: all 0.3s ease;
+  flex: 1;
+  min-width: 280px;
+  max-width: 350px;
+  height: 240px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+}
+
+.podium-place:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5);
+}
+
+/* First place - Gold */
+.podium-place.first {
+  order: 2;
+  border-color: #fbbf24;
+  background: linear-gradient(135deg, rgba(251, 191, 36, 0.15) 0%, rgba(0, 24, 69, 0.9) 100%);
+  box-shadow: 0 8px 24px rgba(251, 191, 36, 0.4);
+}
+
+/* Second place - Silver */
+.podium-place.second {
+  order: 1;
+  border-color: #d1d5db;
+  background: linear-gradient(135deg, rgba(209, 213, 219, 0.12) 0%, rgba(0, 24, 69, 0.9) 100%);
+  box-shadow: 0 6px 20px rgba(209, 213, 219, 0.3);
+}
+
+/* Third place - Bronze */
+.podium-place.third {
+  order: 3;
+  border-color: #cd7f32;
+  background: linear-gradient(135deg, rgba(205, 127, 50, 0.15) 0%, rgba(0, 24, 69, 0.9) 100%);
+  box-shadow: 0 6px 20px rgba(205, 127, 50, 0.3);
+}
+
+.podium-medal {
+  font-size: 64px;
+  margin-bottom: 8px;
+  filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.4));
+}
+
+.podium-society {
+  font-size: 20px;
+  font-weight: 700;
+  color: #FFFFFF;
+  margin: 0 0 12px 0;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  line-height: 1.2;
+}
+
+.podium-score {
+  font-size: 32px;
+  font-weight: 800;
+  color: #C9A961;
+  text-shadow: 0 2px 6px rgba(201, 169, 97, 0.5);
+}
+
+/* Score Breakdown Legend */
+.score-breakdown-legend {
+  margin: 32px 0;
+  padding: 24px;
+  background: linear-gradient(135deg, rgba(0, 24, 69, 0.8) 0%, rgba(0, 40, 85, 0.7) 100%);
+  border: 1px solid rgba(201, 169, 97, 0.25);
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.score-breakdown-legend h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #FFFFFF;
+  margin: 0 0 16px 0;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+}
+
+.legend-items {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.legend-weight {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 45px;
+  padding: 6px 10px;
+  background: linear-gradient(135deg, #C9A961 0%, #A88B47 100%);
+  color: #001845;
+  font-weight: 700;
+  font-size: 14px;
+  border-radius: 6px;
+}
+
+.legend-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: #B8C5D6;
+}
+
+/* Standings Footer */
+.standings-footer {
+  margin-top: 32px;
+  padding: 20px 24px;
+  background: linear-gradient(135deg, rgba(0, 24, 69, 0.7) 0%, rgba(0, 40, 85, 0.6) 100%);
+  border: 1px solid rgba(201, 169, 97, 0.2);
+  border-radius: 12px;
+  text-align: center;
+}
+
+.standings-footer p {
+  margin: 8px 0;
+  font-size: 14px;
+  color: #B8C5D6;
+  line-height: 1.6;
+}
+
+.standings-footer .tiebreaker-note,
+.standings-footer .refresh-note {
+  font-size: 13px;
+  color: #8B9DB0;
+}
+
+/* Responsive */
+@media (max-width: 968px) {
+  .podium {
+    flex-direction: column;
+    align-items: center;
+    padding: 40px 20px;
+  }
+  
+  .podium-place {
+    width: 100%;
+    max-width: 350px;
+    order: initial !important;
+  }
+
+  .legend-items {
+    flex-direction: column;
+    gap: 12px;
+  }
+}
