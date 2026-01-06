@@ -369,3 +369,36 @@
   cursor: not-allowed;
   transform: none;
 }
+
+.watchlist-toggle {
+  padding: 16px 24px;
+  border-bottom: 1px solid rgba(201, 169, 97, 0.2);
+  text-align: center;
+}
+
+.watchlist-btn {
+  padding: 10px 20px;
+  background: rgba(0, 40, 85, 0.4);
+  border: 1px solid rgba(201, 169, 97, 0.3);
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.watchlist-btn:hover {
+  background: rgba(0, 40, 85, 0.6);
+  border-color: rgba(201, 169, 97, 0.5);
+}
+
+.watchlist-btn.watched {
+  background: rgba(201, 169, 97, 0.2);
+  border-color: #C9A961;
+  color: #C9A961;
+}
+
+.watchlist-btn.watched:hover {
+  background: rgba(201, 169, 97, 0.3);
+}

@@ -74,6 +74,8 @@ export default function Dashboard() {
   const [priceMap, setPriceMap] = useState<Map<string, number>>(new Map());
   const [initialCapital, setInitialCapital] = useState(100000);
   const [cashBalance, setCashBalance] = useState(0);
+  const [watchlist, setWatchlist] = useState<string[]>([]);
+  const [watchlistExpanded, setWatchlistExpanded] = useState(false);
   const [summary, setSummary] = useState<PortfolioSummary>({
     totalValue: 0,
     totalPnL: 0,
@@ -205,6 +207,22 @@ export default function Dashboard() {
     }
 
     return priceMap;
+  }, []);
+
+  const fetchWatchlist = useCallback(async (userId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('watchlist')
+        .select('symbol')
+        .eq('profile_id', userId);
+      
+      if (error) throw error;
+      
+      const symbols = data?.map(item => item.symbol) || [];
+      setWatchlist(symbols);
+    } catch (err) {
+      console.error('Error fetching watchlist:', err);
+    }
   }, []);
 
   const calculatePnLForDisplay = useCallback((position: Position) => {
@@ -541,7 +559,23 @@ export default function Dashboard() {
         setInitialCapital(initialCapital);
         setCashBalance(calculatedCashBalance);
 
-        const symbols = [...new Set(aggregatedPositions.map((p) => p.symbol))];
+        // Fetch watchlist and get symbols directly
+        const { data: watchlistData } = await supabase
+          .from('watchlist')
+          .select('symbol')
+          .eq('profile_id', userId);
+
+        const watchlistSymbols = watchlistData?.map(item => item.symbol) || [];
+        setWatchlist(watchlistSymbols);
+
+        // Combine position symbols + watchlist symbols
+        const positionSymbols = aggregatedPositions.map(p => p.symbol);
+        const symbols = [...new Set([...positionSymbols, ...watchlistSymbols])];
+        console.log(`Fetching prices for ${positionSymbols.length} positions + ${watchlistSymbols.length} watchlist stocks...`);
+
+
+        console.log(`📊 Fetching prices for ${positionSymbols.length} positions + ${watchlist.length} watchlist stocks`);
+
 
         const detailedPositions: Position[] = aggregatedPositions.map((pos) => {
           const entryPrice =
@@ -778,14 +812,24 @@ export default function Dashboard() {
     setCompetitionScore(score);
   }, [summary.totalPnLPercent, summary.totalValue, riskMetrics, tradingStats.totalTrades, summary.positionCount, loading, calculateCompetitionScore]);
 
+  // Fetch watchlist early
   useEffect(() => {
     const userId = session?.user?.id;
+    if (userId && !loading) {
+      fetchWatchlist(userId);
+    }
+  }, [session?.user?.id, fetchWatchlist, loading]);
+
+  // Competition scoring useEffect
+  useEffect(() => {
+    const userId = session?.user?.id;
+    
     if (!userId || summary.totalValue === 0 || loading) return;
 
     const timeoutId = setTimeout(async () => {
       // Sync portfolio first
       await syncPortfolioToDatabase(userId, summary.totalValue, summary.totalPnL, initialCapital, cashBalance);
-      
+
       // Then update competition scores
       try {
         await supabase
@@ -799,7 +843,6 @@ export default function Dashboard() {
             score_last_updated: new Date().toISOString(),
           })
           .eq('id', userId);
-        
         console.log('✅ Competition scores updated');
       } catch (err) {
         console.error('❌ Failed to update scores:', err);
@@ -814,6 +857,7 @@ export default function Dashboard() {
     loading,
     syncPortfolioToDatabase,
     initialCapital,
+    cashBalance,
     competitionScore.totalScore,
     competitionScore.returnScore,
     competitionScore.riskScore,
@@ -955,6 +999,32 @@ export default function Dashboard() {
             <div className="empty-state">
               <h2>Active Positions</h2>
               <p>No active positions. Start trading to see your portfolio here.</p>
+            </div>
+          )}
+
+          {watchlist.length > 0 && (
+            <div className="card">
+              <div 
+                className="card-header" 
+                style={{ cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                onClick={() => setWatchlistExpanded(!watchlistExpanded)}
+              >
+                <h2>Watchlist ({watchlist.length})</h2>
+                <span>{watchlistExpanded ? '▼' : '▶'}</span>
+              </div>
+              {watchlistExpanded && (
+                <div className="watchlist-grid">
+                  {watchlist.map(symbol => {
+                    const price = priceMap.get(symbol.toUpperCase()) || 0;
+                    return (
+                      <div key={symbol} className="watchlist-item">
+                        <div className="watchlist-symbol">{symbol}</div>
+                        <div className="watchlist-price">{formatCurrency(price)}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
 
