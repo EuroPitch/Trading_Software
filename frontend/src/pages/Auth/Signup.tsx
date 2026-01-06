@@ -97,7 +97,6 @@ export default function Signup() {
         <div className="auth-card society-card">
           <div className="auth-header">
             <div className="auth-logo">
-              <div className="logo-icon">📈</div>
               <h1>EuroPitch Portfolio Challenge</h1>
             </div>
             <h2>Register Your Society</h2>
@@ -235,7 +234,6 @@ export default function Signup() {
             <h3>European Portfolio Challenge</h3>
             <ul className="feature-list">
               <li>
-                <span className="feature-icon">🏆</span>
                 <div>
                   <strong>Team Competition</strong>
                   <p>Compete with university societies across Europe</p>
