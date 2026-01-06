@@ -89,7 +89,7 @@ export default function Standings() {
   return (
     <div className="standings-container">
       <div className="standings-header">
-        <h1>Competition Leaderboard</h1>
+        <h1>EuroPitch Portfolio Round Leaderboard</h1>
         <p className="subtitle">Track your society's performance against other societies</p>
       </div>
 
