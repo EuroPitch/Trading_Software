@@ -335,13 +335,14 @@ export default function Dashboard() {
   }, []);
 
   // Sync portfolio to database and save HOURLY snapshot
-  const syncPortfolioToDatabase = useCallback(async (userId: string, totalEquity: number, realizedPnL: number, initCapital: number) => {
+  const syncPortfolioToDatabase = useCallback(async (userId: string, totalEquity: number, realizedPnL: number, initCapital: number, cash_balance: number) => {
     try {
       const { error } = await supabase
         .from('profiles')
         .update({
           total_equity: totalEquity,
-          realized_pnl: realizedPnL
+          realized_pnl: realizedPnL,
+          cash_balance: cashBalance,
         })
         .eq('id', userId);
 
@@ -783,7 +784,7 @@ export default function Dashboard() {
 
     const timeoutId = setTimeout(async () => {
       // Sync portfolio first
-      await syncPortfolioToDatabase(userId, summary.totalValue, summary.totalPnL, initialCapital);
+      await syncPortfolioToDatabase(userId, summary.totalValue, summary.totalPnL, initialCapital, cashBalance);
       
       // Then update competition scores
       try {
