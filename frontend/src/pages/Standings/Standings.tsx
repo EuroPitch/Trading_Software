@@ -182,7 +182,6 @@ export default function Standings() {
                       </td>
                       <td className="society-col">
                         <strong>{profile.society_name || "Unknown Society"}</strong>
-                        {isCurrentUser && <span className="you-badge">You</span>}
                       </td>
                       <td>{formatCurrency(profile.total_equity || 0)}</td>
                       <td className={profile.realized_pnl >= 0 ? "positive" : "negative"}>
