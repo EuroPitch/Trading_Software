@@ -8,7 +8,11 @@ interface TradeFormProps {
   onClose?: () => void;
 }
 
-export default function TradeForm({ stock, onExecuteTrade, onClose }: TradeFormProps) {
+export default function TradeForm({
+  stock,
+  onExecuteTrade,
+  onClose,
+}: TradeFormProps) {
   const [action, setAction] = useState<"buy" | "sell">("buy");
   const [quantity, setQuantity] = useState(0);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -20,8 +24,11 @@ export default function TradeForm({ stock, onExecuteTrade, onClose }: TradeFormP
 
   useEffect(() => {
     const fetchUserData = async () => {
-      const { data: { user }, error: authError } = await supabase.auth.getUser();
-      
+      const {
+        data: { user },
+        error: authError,
+      } = await supabase.auth.getUser();
+
       if (authError || !user) {
         console.error("Auth error:", authError);
         return;
@@ -71,24 +78,59 @@ export default function TradeForm({ stock, onExecuteTrade, onClose }: TradeFormP
 
   const isValidOrder = () => {
     if (quantity <= 0) return false;
-    
+
     if (action === "buy") {
       if (cashBalance === null) return false;
       return totalValue <= cashBalance;
     }
-    
+
+    // For sell (short) action, check if we're going short and validate margin requirement
+    if (action === "sell") {
+      if (cashBalance === null) return false;
+
+      // If we have holdings, selling reduces the position
+      if (currentHoldings > 0) {
+        // Selling existing long position - allowed if quantity <= holdings
+        return quantity <= currentHoldings;
+      } else {
+        // Going short - need 150% of short position value in cash balance
+        const shortPositionValue = quantity * stock.price;
+        const requiredCash = shortPositionValue * 1.5;
+        return cashBalance >= requiredCash;
+      }
+    }
+
     return true;
   };
 
   const getErrorMessage = () => {
     if (quantity <= 0) return "Quantity must be greater than 0";
-    
+
     if (action === "buy" && cashBalance !== null) {
       if (totalValue > cashBalance) {
-        return `Insufficient funds. Available: €${cashBalance.toFixed(2)}, Required: €${totalValue.toFixed(2)}`;
+        return `Insufficient funds. You have €${cashBalance.toFixed(2)}, but require €${totalValue.toFixed(2)}`;
       }
     }
-    
+
+    if (action === "sell" && cashBalance !== null) {
+      if (currentHoldings > 0) {
+        // Selling existing long position
+        if (quantity > currentHoldings) {
+          const excessQuantity = quantity - currentHoldings;
+          const excessValue = excessQuantity * stock.price;
+          const requiredCash = excessValue * 1.5;
+          return `Cannot short more than your margin allows. To short ${excessQuantity} shares, you would need €${requiredCash.toFixed(2)}, but you have €${cashBalance.toFixed(2)}`;
+        }
+      } else {
+        // Going short (no existing holdings or negative balance)
+        const shortPositionValue = quantity * stock.price;
+        const requiredCash = shortPositionValue * 1.5;
+        if (cashBalance < requiredCash) {
+          return `Insufficient margin for shorting. To short ${quantity} shares, you would need €${requiredCash.toFixed(2)}, but you have €${cashBalance.toFixed(2)}`;
+        }
+      }
+    }
+
     return null;
   };
 
@@ -97,7 +139,10 @@ export default function TradeForm({ stock, onExecuteTrade, onClose }: TradeFormP
 
     setIsProcessing(true);
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
 
     if (authError || !user) {
       console.error("Auth error:", authError);
@@ -110,17 +155,19 @@ export default function TradeForm({ stock, onExecuteTrade, onClose }: TradeFormP
 
     const { data, error } = await supabase
       .from("trades")
-      .insert([{
-        profile_id: user.id,
-        symbol: stock.symbol,
-        side: action,
-        quantity: quantity,
-        price: stock.price,
-        order_type: "market",
-        placed_at: now,
-        filled_at: now,
-        created_by: user.id,
-      }])
+      .insert([
+        {
+          profile_id: user.id,
+          symbol: stock.symbol,
+          side: action,
+          quantity: quantity,
+          price: stock.price,
+          order_type: "market",
+          placed_at: now,
+          filled_at: now,
+          created_by: user.id,
+        },
+      ])
       .select();
 
     if (error) {
@@ -138,10 +185,13 @@ export default function TradeForm({ stock, onExecuteTrade, onClose }: TradeFormP
 
     setIsProcessing(false);
     alert(
-      `${action.toUpperCase()} order executed: ${quantity} shares of ${stock.symbol} at ${new Intl.NumberFormat("en-UK", {
-        style: "currency",
-        currency: "EUR",
-      }).format(stock.price)}`
+      `${action.toUpperCase()} order executed: ${quantity} shares of ${stock.symbol} at ${new Intl.NumberFormat(
+        "en-UK",
+        {
+          style: "currency",
+          currency: "EUR",
+        },
+      ).format(stock.price)}`,
     );
 
     if (onClose) {
@@ -218,9 +268,7 @@ export default function TradeForm({ stock, onExecuteTrade, onClose }: TradeFormP
         </div>
       </div>
 
-      {errorMessage && (
-        <div className="error-message">{errorMessage}</div>
-      )}
+      {errorMessage && <div className="error-message">{errorMessage}</div>}
 
       <div className="modal-actions">
         <button
