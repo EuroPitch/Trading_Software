@@ -911,6 +911,11 @@ export default function Dashboard() {
           <div className="competition-score-section">
             <h2>Competition Score</h2>
             <div className="stats-grid">
+              <div className="stat-card highlight">
+                <div className="stat-label">Total Competition Score</div>
+                <div className="stat-value">{competitionScore.totalScore}/100</div>
+                <div className="stat-description">Your overall competition ranking score</div>
+              </div>
               <div className="stat-card">
                 <div className="stat-label">Return Score (40%)</div>
                 <div className="stat-value">{competitionScore.returnScore}</div>
@@ -930,11 +935,6 @@ export default function Dashboard() {
                 <div className="stat-label">Activity Score (10%)</div>
                 <div className="stat-value">{competitionScore.activityScore}</div>
                 <div className="stat-description">Trading frequency and diversification</div>
-              </div>
-              <div className="stat-card highlight">
-                <div className="stat-label">Total Competition Score</div>
-                <div className="stat-value">{competitionScore.totalScore}/100</div>
-                <div className="stat-description">Your overall competition ranking score</div>
               </div>
             </div>
           </div>
