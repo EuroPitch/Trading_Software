@@ -495,7 +495,8 @@
   border-radius: 8px;
   padding: 16px;
   transition: all 0.2s;
-  cursor: pointer;
+  display: flex;
+  flex-direction: column;
 }
 
 .watchlist-item:hover {
@@ -504,17 +505,71 @@
   transform: translateY(-2px);
 }
 
+.watchlist-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
 .watchlist-symbol {
   font-size: 18px;
   font-weight: 700;
   color: #C9A961;
-  margin-bottom: 8px;
+}
+
+.watchlist-remove-btn {
+  background: rgba(164, 36, 59, 0.2);
+  border: 1px solid rgba(164, 36, 59, 0.3);
+  color: #A4243B;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: 600;
+  transition: all 0.2s;
+  padding: 0;
+}
+
+.watchlist-remove-btn:hover {
+  background: rgba(164, 36, 59, 0.4);
+  border-color: rgba(164, 36, 59, 0.6);
+  transform: scale(1.1);
 }
 
 .watchlist-price {
   font-size: 16px;
   font-weight: 600;
   color: #ffffff;
+}
+
+.watchlist-section {
+  margin: 2rem 0;
+}
+
+.watchlist-section h2 {
+  font-size: 24px;
+  font-weight: 600;
+  color: #FFFFFF;
+  margin-bottom: 20px;
+}
+
+.watchlist-empty {
+  padding: 40px 20px;
+  text-align: center;
+  background: linear-gradient(135deg, rgba(0, 24, 69, 0.8) 0%, rgba(0, 40, 85, 0.7) 100%);
+  border: 1px solid rgba(201, 169, 97, 0.25);
+  border-radius: 10px;
+  color: #B8C5D6;
+}
+
+.watchlist-empty p {
+  margin: 0;
+  font-size: 16px;
 }
 
 .card-header {
