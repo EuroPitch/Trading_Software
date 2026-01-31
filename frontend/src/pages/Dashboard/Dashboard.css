@@ -150,6 +150,24 @@
   color: #ff9800;
 }
 
+/* Competition Score Section - Keep 5 cards in one row */
+.competition-score-section .stats-grid {
+  grid-template-columns: repeat(5, 1fr);
+}
+
+/* Highlight the Total Competition Score card in the row */
+.competition-score-section .stat-card.highlight {
+  grid-column: auto;
+  background: linear-gradient(135deg, rgba(201, 169, 97, 0.15) 0%, rgba(201, 169, 97, 0.1) 100%);
+  border-color: rgba(201, 169, 97, 0.5);
+  box-shadow: 0 4px 20px rgba(201, 169, 97, 0.2);
+}
+
+.competition-score-section .stat-card.highlight:hover {
+  border-color: rgba(201, 169, 97, 0.7);
+  box-shadow: 0 6px 28px rgba(201, 169, 97, 0.3);
+}
+
 /* Risk Metrics Section */
 .risk-metrics-section {
   margin: 2rem 0 3rem 0;
