@@ -54,6 +54,52 @@
   margin-bottom: 40px;
 }
 
+/* Analytics charts section */
+.dashboard-charts {
+  margin-bottom: 40px;
+}
+
+.dashboard-charts .chart-container {
+  background: linear-gradient(135deg, rgba(0, 24, 69, 0.8) 0%, rgba(0, 40, 85, 0.7) 100%);
+  border: 1px solid rgba(201, 169, 97, 0.25);
+  border-radius: 10px;
+  padding: 20px;
+  margin-bottom: 20px;
+  min-height: 320px;
+}
+
+.dashboard-charts .chart-container h2 {
+  margin: 0 0 16px 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.dashboard-charts .chart-full-width {
+  width: 100%;
+}
+
+.dashboard-charts .chart-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+@media (max-width: 900px) {
+  .dashboard-charts .chart-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+.dashboard-charts .chart-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 260px;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 14px;
+}
+
 .stat-card {
   background: linear-gradient(135deg, rgba(0, 24, 69, 0.8) 0%, rgba(0, 40, 85, 0.7) 100%);
   color: #ffffff;

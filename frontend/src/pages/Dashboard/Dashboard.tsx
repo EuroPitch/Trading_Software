@@ -1,8 +1,13 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
+  LineChart,
+  Line,
   BarChart,
   Bar,
+  PieChart,
+  Pie,
+  Cell,
   XAxis,
   YAxis,
   Tooltip,
@@ -16,6 +21,21 @@ import { useAuth } from "../../context/AuthContext";
 type PERatioPoint = {
   symbol: string;
   pe_ratio: number;
+};
+
+type EquityDataPoint = {
+  date: string;
+  equity: number;
+};
+
+type DailyPnLDataPoint = {
+  date: string;
+  pnl: number;
+};
+
+type AllocationDataPoint = {
+  symbol: string;
+  value: number;
 };
 
 type PortfolioSummary = {
@@ -121,6 +141,9 @@ export default function Dashboard() {
   const [societyName, setSocietyName] = useState("Society");
   const [peRatioData, setPeRatioData] = useState<PERatioPoint[]>([]);
   const [peRatioError, setPeRatioError] = useState<string | null>(null);
+  const [equityCurveData, setEquityCurveData] = useState<EquityDataPoint[]>([]);
+  const [dailyPnLData, setDailyPnLData] = useState<DailyPnLDataPoint[]>([]);
+  const [allocationData, setAllocationData] = useState<AllocationDataPoint[]>([]);
 
   const handleLogout = async () => {
     try {
@@ -141,6 +164,52 @@ export default function Dashboard() {
 
   const formatPercent = (value: number) =>
     `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
+
+  /** Equity curve from trades only: sort by placed_at ASC, start at initial_capital, BUY -> equity -= notional, SELL -> equity += notional */
+  const calculateEquityCurve = useCallback(
+    (trades: any[], initCapital: number): EquityDataPoint[] => {
+      const sorted = [...(trades ?? [])].sort(
+        (a, b) =>
+          new Date(a.placed_at ?? 0).getTime() -
+          new Date(b.placed_at ?? 0).getTime(),
+      );
+      let equity = initCapital;
+      const points: EquityDataPoint[] = [];
+      const startDate =
+        sorted.length > 0
+          ? new Date(sorted[0].placed_at).toISOString().slice(0, 10)
+          : new Date().toISOString().slice(0, 10);
+      points.push({ date: startDate, equity: initCapital });
+      sorted.forEach((t: any) => {
+        const side = (t.side ?? "buy").toLowerCase();
+        const notional = Number(
+          t.notional ?? Number(t.quantity ?? 0) * Number(t.price ?? 0),
+        );
+        if (side === "buy") equity -= notional;
+        else if (side === "sell") equity += notional;
+        const date = new Date(t.placed_at ?? 0).toISOString().slice(0, 10);
+        points.push({ date, equity });
+      });
+      return points;
+    },
+    [],
+  );
+
+  /** Daily realized P&L from trades: group by day, pnl = sum(SELL notional) - sum(BUY notional) per day */
+  const calculateDailyPnL = useCallback((trades: any[]): DailyPnLDataPoint[] => {
+    const byDay = new Map<string, number>();
+    (trades ?? []).forEach((t: any) => {
+      const date = new Date(t.placed_at ?? 0).toISOString().slice(0, 10);
+      const notional = Number(t.notional ?? Number(t.quantity ?? 0) * Number(t.price ?? 0));
+      const side = (t.side ?? "buy").toLowerCase();
+      const current = byDay.get(date) ?? 0;
+      if (side === "sell") byDay.set(date, current + notional);
+      else if (side === "buy") byDay.set(date, current - notional);
+    });
+    return Array.from(byDay.entries())
+      .map(([date, pnl]) => ({ date, pnl }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+  }, []);
 
   const calculatePnL = useCallback(
     (position: Position, currentPrice: number): number => {
@@ -605,6 +674,9 @@ export default function Dashboard() {
         const calculatedCashBalance =
           initialCapital - totalCostBasis + totalProceeds;
 
+        setEquityCurveData(calculateEquityCurve(trades, initialCapital));
+        setDailyPnLData(calculateDailyPnL(trades));
+
         const positionsMap = new Map<string, any>();
 
         trades.forEach((trade: any) => {
@@ -811,6 +883,14 @@ export default function Dashboard() {
           const prices = await fetchPrices(symbols);
           if (prices.size > 0) {
             setPriceMap(prices);
+            const allocation = aggregatedPositions
+              .map((pos) => ({
+                symbol: pos.symbol,
+                value:
+                  Math.abs(pos.quantity) * (prices.get(pos.symbol) ?? 0),
+              }))
+              .filter((a) => a.value > 0);
+            setAllocationData(allocation);
 
             const updatedPositions = detailedPositions.map((pos) => {
               const freshPrice = prices.get(pos.symbol);
@@ -892,7 +972,14 @@ export default function Dashboard() {
       }
       hasInitializedRef.current = false;
     };
-  }, [session?.user?.id, authLoading, fetchPrices, calculateRiskMetrics]);
+  }, [
+    session?.user?.id,
+    authLoading,
+    fetchPrices,
+    calculateRiskMetrics,
+    calculateEquityCurve,
+    calculateDailyPnL,
+  ]);
 
   useEffect(() => {
     if (positions.length === 0 || priceMap.size === 0) return;
@@ -916,6 +1003,14 @@ export default function Dashboard() {
 
     if (hasChanges) {
       setPositions(updatedPositions);
+
+      const allocation = updatedPositions
+        .map((pos) => ({
+          symbol: pos.symbol,
+          value: pos.marketValue,
+        }))
+        .filter((a) => a.value > 0);
+      setAllocationData(allocation);
 
       let totalMarketValue = 0;
       updatedPositions.forEach((pos) => {
@@ -1114,6 +1209,204 @@ export default function Dashboard() {
               <div className="stat-value">{summary.positionCount}</div>
             </div>
           </div>
+
+          <section className="dashboard-charts">
+            <div className="chart-container chart-full-width">
+              <h2>Equity Curve</h2>
+              <ResponsiveContainer width="100%" height={300}>
+                <LineChart
+                  data={equityCurveData}
+                  margin={{ top: 8, right: 16, left: 8, bottom: 24 }}
+                >
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    stroke="rgba(255, 255, 255, 0.1)"
+                  />
+                  <XAxis
+                    dataKey="date"
+                    stroke="rgba(255, 255, 255, 0.5)"
+                    tick={{
+                      fill: "rgba(255, 255, 255, 0.7)",
+                      fontSize: 11,
+                    }}
+                    tickFormatter={(value) => {
+                      const [y, m, d] = value.split("-");
+                      return d && m && y ? `${d}/${m}/${y}` : value;
+                    }}
+                  />
+                  <YAxis
+                    stroke="rgba(255, 255, 255, 0.5)"
+                    tick={{
+                      fill: "rgba(255, 255, 255, 0.7)",
+                      fontSize: 12,
+                    }}
+                    tickFormatter={(v) => formatCurrency(v)}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: "rgba(20, 25, 35, 0.95)",
+                      border: "1px solid rgba(255, 255, 255, 0.1)",
+                      borderRadius: "8px",
+                      color: "#fff",
+                    }}
+                    labelFormatter={(value) => {
+                      const [y, m, d] = String(value).split("-");
+                      return d && m && y ? `${d}/${m}/${y}` : value;
+                    }}
+                    formatter={(value: number) => [
+                      formatCurrency(Number(value)),
+                      "Equity",
+                    ]}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="equity"
+                    stroke="var(--brand, #2e8cff)"
+                    strokeWidth={2}
+                    dot={{ r: 3 }}
+                    activeDot={{ r: 5 }}
+                    name="Equity"
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="chart-row">
+              <div className="chart-container">
+                <h2>Daily Realized P&L</h2>
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart
+                    data={dailyPnLData}
+                    margin={{ top: 8, right: 16, left: 8, bottom: 24 }}
+                  >
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      stroke="rgba(255, 255, 255, 0.1)"
+                    />
+                    <XAxis
+                      dataKey="date"
+                      stroke="rgba(255, 255, 255, 0.5)"
+                      tick={{
+                        fill: "rgba(255, 255, 255, 0.7)",
+                        fontSize: 11,
+                      }}
+                      tickFormatter={(value) => {
+                        const [y, m, d] = value.split("-");
+                        return d && m && y ? `${d}/${m}/${y}` : value;
+                      }}
+                    />
+                    <YAxis
+                      stroke="rgba(255, 255, 255, 0.5)"
+                      tick={{
+                        fill: "rgba(255, 255, 255, 0.7)",
+                        fontSize: 12,
+                      }}
+                      tickFormatter={(v) => formatCurrency(Number(v))}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: "rgba(20, 25, 35, 0.95)",
+                        border: "1px solid rgba(255, 255, 255, 0.1)",
+                        borderRadius: "8px",
+                        color: "#fff",
+                      }}
+                      content={({ active, payload, label }) => {
+                        if (!active || !payload?.length) return null;
+                        const value = Number(payload[0]?.value ?? 0);
+                        const dateStr = String(label ?? "");
+                        const [y, m, d] = dateStr.split("-");
+                        const dateFormatted =
+                          d && m && y ? `${d}/${m}/${y}` : dateStr;
+                        const valueColor =
+                          value >= 0
+                            ? "rgba(34, 197, 94, 1)"
+                            : "rgba(239, 68, 68, 1)";
+                        return (
+                          <div style={{ padding: "4px 8px" }}>
+                            <div style={{ color: "#fff", marginBottom: 4 }}>
+                              {dateFormatted}
+                            </div>
+                            <div style={{ color: valueColor, fontWeight: 600 }}>
+                              {formatCurrency(value)}
+                            </div>
+                          </div>
+                        );
+                      }}
+                    />
+                    <Bar dataKey="pnl" name="P&L" radius={[4, 4, 0, 0]}>
+                      {dailyPnLData.map((entry, index) => (
+                        <Cell
+                          key={`cell-${index}`}
+                          fill={
+                            entry.pnl >= 0
+                              ? "rgba(34, 197, 94, 0.9)"
+                              : "rgba(239, 68, 68, 0.9)"
+                          }
+                        />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="chart-container">
+                <h2>Position Allocation</h2>
+                {allocationData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={300}>
+                    <PieChart>
+                      <Pie
+                        data={allocationData}
+                        dataKey="value"
+                        nameKey="symbol"
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={60}
+                        outerRadius={100}
+                        paddingAngle={2}
+                        label={({ name, percent }: { name?: string; percent?: number }) =>
+                          `${name ?? ""} ${((percent ?? 0) * 100).toFixed(0)}%`
+                        }
+                      >
+                        {allocationData.map((_, index) => (
+                          <Cell
+                            key={`cell-${index}`}
+                            fill={
+                              [
+                                "#2e8cff",
+                                "#22c55e",
+                                "#eab308",
+                                "#ef4444",
+                                "#8b5cf6",
+                                "#ec4899",
+                                "#06b6d4",
+                                "#f97316",
+                              ][index % 8]
+                            }
+                          />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: "rgba(20, 25, 35, 0.95)",
+                          border: "1px solid rgba(255, 255, 255, 0.1)",
+                          borderRadius: "8px",
+                          color: "#fff",
+                        }}
+                        labelStyle={{ color: "#fff" }}
+                        itemStyle={{ color: "#60a5fa" }}
+                        formatter={(value: number) => [
+                          formatCurrency(value),
+                          "Value",
+                        ]}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="chart-empty">
+                    No positions with market value to display
+                  </div>
+                )}
+              </div>
+            </div>
+          </section>
 
           <div className="competition-score-section">
             <h2>Competition Score</h2>
