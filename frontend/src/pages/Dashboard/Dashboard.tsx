@@ -1,8 +1,22 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  CartesianGrid,
+  ResponsiveContainer,
+} from "recharts";
 import "./Dashboard.css";
 import { supabase } from "../../supabaseClient";
 import { useAuth } from "../../context/AuthContext";
+
+type PERatioPoint = {
+  symbol: string;
+  pe_ratio: number;
+};
 
 type PortfolioSummary = {
   totalValue: number;
@@ -105,6 +119,8 @@ export default function Dashboard() {
     beta: 0,
   });
   const [societyName, setSocietyName] = useState("Society");
+  const [peRatioData, setPeRatioData] = useState<PERatioPoint[]>([]);
+  const [peRatioError, setPeRatioError] = useState<string | null>(null);
 
   const handleLogout = async () => {
     try {
@@ -957,6 +973,42 @@ export default function Dashboard() {
     }
   }, [session?.user?.id, fetchWatchlist, loading]);
 
+  // Fetch P/E ratios from Supabase fundamentals (once on load, no polling)
+  useEffect(() => {
+    let cancelled = false;
+    setPeRatioError(null);
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from("fundamentals")
+          .select("symbol, pe_ratio")
+          .not("pe_ratio", "is", null)
+          .order("symbol", { ascending: true });
+        if (cancelled) return;
+        if (error) {
+          setPeRatioError("P/E data unavailable");
+          setPeRatioData([]);
+          return;
+        }
+        const rows = (data ?? []).filter(
+          (r): r is PERatioPoint =>
+            typeof r?.symbol === "string" &&
+            typeof r?.pe_ratio === "number" &&
+            Number.isFinite(r.pe_ratio),
+        );
+        setPeRatioData(rows);
+      } catch {
+        if (!cancelled) {
+          setPeRatioError("P/E data unavailable");
+          setPeRatioData([]);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   // Competition scoring useEffect
   useEffect(() => {
     const userId = session?.user?.id;
@@ -1197,6 +1249,67 @@ export default function Dashboard() {
               </p>
             </div>
           )}
+
+          <div className="pe-ratios-section">
+            <h2>P/E Ratios</h2>
+            {peRatioError ? (
+              <p className="pe-ratios-error">{peRatioError}</p>
+            ) : peRatioData.length === 0 ? (
+              <p className="pe-ratios-empty">No P/E data available</p>
+            ) : (
+              <div className="pe-ratios-chart">
+                <ResponsiveContainer width="100%" height={320}>
+                  <BarChart
+                    data={peRatioData}
+                    margin={{ top: 12, right: 12, left: 12, bottom: 60 }}
+                  >
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      stroke="rgba(255, 255, 255, 0.1)"
+                    />
+                    <XAxis
+                      dataKey="symbol"
+                      stroke="rgba(255, 255, 255, 0.5)"
+                      tick={{ fill: "rgba(255, 255, 255, 0.7)", fontSize: 12 }}
+                      angle={-45}
+                      textAnchor="end"
+                      height={60}
+                      interval={0}
+                    />
+                    <YAxis
+                      stroke="rgba(255, 255, 255, 0.5)"
+                      tick={{ fill: "rgba(255, 255, 255, 0.7)", fontSize: 12 }}
+                      label={{
+                        value: "P/E Ratio",
+                        angle: -90,
+                        position: "insideLeft",
+                        fill: "rgba(255, 255, 255, 0.7)",
+                      }}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: "rgba(20, 25, 35, 0.95)",
+                        border: "1px solid rgba(255, 255, 255, 0.1)",
+                        borderRadius: "8px",
+                        color: "#fff",
+                      }}
+                      formatter={(value: number) => [
+                        Number(value).toFixed(2),
+                        "P/E",
+                      ]}
+                      labelFormatter={(symbol) => `Symbol: ${symbol}`}
+                    />
+                    <Bar
+                      dataKey="pe_ratio"
+                      fill="var(--brand, #2e8cff)"
+                      radius={[4, 4, 0, 0]}
+                      name="P/E"
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </div>
 
           <div className="watchlist-section">
             <h2>Watchlist {watchlist.length > 0 && `(${watchlist.length})`}</h2>

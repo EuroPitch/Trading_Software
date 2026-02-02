@@ -192,6 +192,36 @@
   margin-bottom: 20px;
 }
 
+/* P/E Ratios section (below Active Positions) */
+.pe-ratios-section {
+  margin: 2rem 0;
+}
+
+.pe-ratios-section h2 {
+  font-size: 24px;
+  font-weight: 600;
+  color: #FFFFFF;
+  margin-bottom: 20px;
+}
+
+.pe-ratios-section .pe-ratios-error,
+.pe-ratios-section .pe-ratios-empty {
+  color: var(--muted, #9aa3b2);
+  margin: 0;
+  padding: 1.5rem;
+  background: var(--panel, #111318);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+}
+
+.pe-ratios-chart {
+  min-height: 320px;
+  background: var(--panel, #111318);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  padding: 1rem;
+}
+
 .table-container {
   background: linear-gradient(135deg, rgba(0, 24, 69, 0.8) 0%, rgba(0, 40, 85, 0.7) 100%);
   border: 1px solid rgba(201, 169, 97, 0.25);
