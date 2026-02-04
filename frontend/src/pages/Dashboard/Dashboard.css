@@ -277,6 +277,31 @@
   border: 1px solid rgba(164, 36, 59, 0.3);
 }
 
+.close-position-button {
+  background: rgba(164, 36, 59, 0.15);
+  border: 1px solid rgba(164, 36, 59, 0.3);
+  color: #A4243B;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.close-position-button:hover {
+  background: rgba(164, 36, 59, 0.3);
+  border-color: rgba(164, 36, 59, 0.5);
+  transform: translateY(-1px);
+}
+
+.close-position-button:active {
+  transform: translateY(0);
+  background: rgba(164, 36, 59, 0.4);
+}
+
 .stale-indicator {
   margin-left: 0.5rem;
   color: #ff9800;
