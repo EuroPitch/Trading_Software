@@ -125,7 +125,9 @@ export default function Dashboard() {
     }
 
     try {
-      const currentPrice = priceMap.get(position.symbol.toUpperCase().trim()) ?? position.currentPrice;
+      const currentPrice =
+        priceMap.get(position.symbol.toUpperCase().trim()) ??
+        position.currentPrice;
 
       // Create a closing trade (opposite side of the position)
       const closingTrade = {
@@ -141,7 +143,6 @@ export default function Dashboard() {
         created_by: userId,
       };
 
-
       // Insert the closing trade
       const { error: insertError } = await supabase
         .from("trades")
@@ -156,7 +157,6 @@ export default function Dashboard() {
         .select("*")
         .eq("profile_id", userId)
         .order("placed_at", { ascending: true });
-
 
       if (fetchError) throw fetchError;
 
@@ -177,7 +177,8 @@ export default function Dashboard() {
         }
       });
 
-      const calculatedCashBalance = initialCapital - totalCostBasis + totalProceeds;
+      const calculatedCashBalance =
+        initialCapital - totalCostBasis + totalProceeds;
       setCashBalance(calculatedCashBalance);
 
       // Recalculate positions
@@ -213,12 +214,15 @@ export default function Dashboard() {
       });
 
       const aggregatedPositions = Array.from(positionsMap.values()).filter(
-        (pos) => Math.abs(pos.quantity) > 0.0001
+        (pos) => Math.abs(pos.quantity) > 0.0001,
       );
 
       // Update positions with current prices
       const updatedPositions: Position[] = aggregatedPositions.map((pos) => {
-        const entryPrice = pos.quantity !== 0 ? Math.abs(pos.costBasis) / Math.abs(pos.quantity) : 0;
+        const entryPrice =
+          pos.quantity !== 0
+            ? Math.abs(pos.costBasis) / Math.abs(pos.quantity)
+            : 0;
         const currentPrice = priceMap.get(pos.symbol) ?? entryPrice;
         const marketValue = Math.abs(pos.quantity) * currentPrice;
 
@@ -239,10 +243,14 @@ export default function Dashboard() {
       setPositions(updatedPositions);
 
       // Recalculate summary
-      const totalMarketValue = updatedPositions.reduce((sum, p) => sum + p.marketValue, 0);
+      const totalMarketValue = updatedPositions.reduce(
+        (sum, p) => sum + p.marketValue,
+        0,
+      );
       const totalEquity = calculatedCashBalance + totalMarketValue;
       const totalPnL = totalEquity - initialCapital;
-      const totalReturn = initialCapital > 0 ? (totalPnL / initialCapital) * 100 : 0;
+      const totalReturn =
+        initialCapital > 0 ? (totalPnL / initialCapital) * 100 : 0;
 
       setSummary({
         totalValue: totalEquity,
@@ -262,9 +270,9 @@ export default function Dashboard() {
   };
 
   const formatCurrency = (value: number) =>
-    new Intl.NumberFormat("en-UK", {
+    new Intl.NumberFormat("en-US", {
       style: "currency",
-      currency: "EUR",
+      currency: "USD",
     }).format(value);
 
   const formatPercent = (value: number) =>
