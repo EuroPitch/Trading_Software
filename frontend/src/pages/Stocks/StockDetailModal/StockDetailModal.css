@@ -402,3 +402,111 @@
 .watchlist-btn.watched:hover {
   background: rgba(201, 169, 97, 0.3);
 }
+
+/* Chart Section */
+.chart-section {
+  padding: 24px;
+  background: rgba(0, 24, 69, 0.2);
+  border-top: 1px solid rgba(201, 169, 97, 0.15);
+}
+
+/* Sticky Footer with Trade CTA */
+.modal-footer-sticky {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 20px 24px;
+  background: linear-gradient(180deg, rgba(0, 24, 69, 0.85) 0%, rgba(0, 24, 69, 0.98) 100%);
+  backdrop-filter: blur(10px);
+  border-top: 2px solid rgba(201, 169, 97, 0.3);
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3);
+  z-index: 10;
+}
+
+.btn-trade-primary {
+  flex: 1;
+  padding: 16px 32px;
+  background: linear-gradient(135deg, #C9A961 0%, #D4B76A 100%);
+  border: none;
+  border-radius: 8px;
+  color: #001428;
+  font-size: 16px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 4px 12px rgba(201, 169, 97, 0.4);
+}
+
+.btn-trade-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(201, 169, 97, 0.6);
+  background: linear-gradient(135deg, #D4B76A 0%, #C9A961 100%);
+}
+
+.btn-watchlist {
+  padding: 14px 24px;
+  background: rgba(0, 40, 85, 0.4);
+  border: 1px solid rgba(201, 169, 97, 0.3);
+  border-radius: 8px;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.btn-watchlist:hover {
+  background: rgba(0, 40, 85, 0.6);
+  border-color: rgba(201, 169, 97, 0.5);
+}
+
+.btn-watchlist.watched {
+  background: rgba(201, 169, 97, 0.2);
+  border-color: #C9A961;
+  color: #C9A961;
+}
+
+.btn-watchlist.watched:hover {
+  background: rgba(201, 169, 97, 0.3);
+}
+
+/* Mobile responsiveness for sticky footer */
+@media (max-width: 768px) {
+  .modal-footer-sticky {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .btn-trade-primary {
+    width: 100%;
+  }
+
+  .btn-watchlist {
+    width: 100%;
+  }
+}
+
+.btn-scroll-trade {
+  padding: 14px 24px;
+  background: rgba(0, 40, 85, 0.4);
+  border: 1px solid rgba(201, 169, 97, 0.3);
+  border-radius: 8px;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.btn-scroll-trade:hover {
+  background: rgba(0, 40, 85, 0.6);
+  border-color: rgba(201, 169, 97, 0.5);
+  transform: translateY(1px);
+}

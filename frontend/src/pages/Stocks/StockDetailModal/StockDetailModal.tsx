@@ -7,6 +7,7 @@ import { supabase } from "../../../supabaseClient";
 export default function StockDetailModal({ stock, onClose }: any) {
   const [activeTab, setActiveTab] = useState("valuation");
   const [isWatched, setIsWatched] = useState(false);
+  const [showTradeModal, setShowTradeModal] = useState(false);
 
   const formatValue = (value: any, format: string) => {
     if (value === null || value === undefined) return "-";
@@ -35,17 +36,14 @@ export default function StockDetailModal({ stock, onClose }: any) {
     const checkWatchlist = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-
       const { data } = await supabase
         .from('watchlist')
         .select('id')
         .eq('profile_id', user.id)
         .eq('symbol', stock.symbol)
         .maybeSingle();
-
       setIsWatched(!!data);
     };
-
     checkWatchlist();
   }, [stock.symbol]);
 
@@ -54,7 +52,6 @@ export default function StockDetailModal({ stock, onClose }: any) {
       { label: "Market Cap", value: stock.marketCap, format: "marketCap" },
       { label: "P/E Ratio", value: stock.peRatio, format: "decimal" },
       { label: "P/B Ratio", value: stock.pbRatio, format: "decimal" },
-      { label: "PEG Ratio", value: stock.pegRatio, format: "decimal" },
       { label: "Dividend Yield", value: stock.dividendYield, format: "percent" },
       { label: "Beta", value: stock.beta, format: "decimal" },
     ],
@@ -70,9 +67,6 @@ export default function StockDetailModal({ stock, onClose }: any) {
       { label: "Earnings Growth", value: stock.earningsGrowth, format: "percent" },
     ],
     technical: [
-      { label: "Current Price", value: stock.price, format: "currency" },
-      { label: "Change", value: stock.change, format: "currency", colored: true },
-      { label: "Change %", value: stock.changePercent, format: "percent", colored: true },
       { label: "RSI (14)", value: stock.rsi, format: "decimal" },
       { label: "52W High", value: stock.fiftyTwoWeekHigh, format: "currency" },
       { label: "52W Low", value: stock.fiftyTwoWeekLow, format: "currency" },
@@ -117,128 +111,110 @@ export default function StockDetailModal({ stock, onClose }: any) {
     }
   };
 
-  const renderTabContent = () => {
-    if (activeTab === "chart") {
-      return <StockChart symbol={stock.symbol} />;
-    }
-
-    return (
-      <div className="metrics-grid">
-        {tabs[activeTab]?.map((metric: any, index: number) => (
-          <div key={index} className="metric-item">
-            <span className="metric-label">{metric.label}</span>
-            <span
-              className={`metric-value ${
-                metric.colored
-                  ? metric.value > 0
-                    ? "positive"
-                    : metric.value < 0
-                    ? "negative"
-                    : ""
-                  : ""
-              }`}
-            >
-              {formatValue(metric.value, metric.format)}
-            </span>
-          </div>
-        ))}
-      </div>
-    );
-  };
-
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+        {/* Header */}
         <div className="modal-header">
           <div>
-            <h2>{stock.name}</h2>
-            <p className="modal-subtitle">{stock.symbol}</p>
+            <h2>{stock.symbol}</h2>
+            <p className="modal-subtitle">{stock.name}</p>
           </div>
-          <button className="btn-modal-close" onClick={onClose}>
-            ×
-          </button>
+          <button className="btn-modal-close" onClick={onClose}>×</button>
         </div>
 
-        <div className="watchlist-toggle">
-          <button
-            className={`watchlist-btn ${isWatched ? 'watched' : ''}`}
-            onClick={toggleWatchlist}
-          >
-            {isWatched ? '★ Remove from Watchlist' : '☆ Add to Watchlist'}
-          </button>
-        </div>
-
+        {/* Quick Stats Summary */}
         <div className="stock-summary">
           <div className="summary-item">
-            <span className="summary-label">Price</span>
-            <span className="summary-value">
-              {formatValue(stock.price, "currency")}
-            </span>
+            <span className="summary-label">Current Price</span>
+            <span className="summary-value">{formatValue(stock.price, "currency")}</span>
           </div>
           <div className="summary-item">
             <span className="summary-label">Change</span>
-            <span
-              className={`summary-value ${
-                stock.change > 0 ? "positive" : stock.change < 0 ? "negative" : ""
-              }`}
-            >
+            <span className={`summary-value ${stock.change >= 0 ? "positive" : "negative"}`}>
               {formatValue(stock.change, "currency")} ({formatValue(stock.changePercent, "percent")})
             </span>
           </div>
           <div className="summary-item">
+            <span className="summary-label">Market Cap</span>
+            <span className="summary-value">{formatValue(stock.marketCap, "marketCap")}</span>
+          </div>
+          <div className="summary-item">
+            <span className="summary-label">P/E Ratio</span>
+            <span className="summary-value">{formatValue(stock.peRatio, "decimal")}</span>
+          </div>
+          <div className="summary-item">
             <span className="summary-label">Volume</span>
-            <span className="summary-value">
-              {stock.volume?.toLocaleString() || "-"}
-            </span>
+            <span className="summary-value">{stock.volume?.toLocaleString() || "-"}</span>
+          </div>
+          <div className="summary-item">
+            <span className="summary-label">RSI (14)</span>
+            <span className="summary-value">{formatValue(stock.rsi, "decimal")}</span>
           </div>
         </div>
 
+        {/* Detailed Metrics Tabs */}
         <div className="modal-tabs">
-          <button
-            className={`tab-button ${activeTab === "valuation" ? "active" : ""}`}
-            onClick={() => setActiveTab("valuation")}
-          >
-            Valuation
-          </button>
-          <button
-            className={`tab-button ${activeTab === "profitability" ? "active" : ""}`}
-            onClick={() => setActiveTab("profitability")}
-          >
-            Profitability
-          </button>
-          <button
-            className={`tab-button ${activeTab === "growth" ? "active" : ""}`}
-            onClick={() => setActiveTab("growth")}
-          >
-            Growth
-          </button>
-          <button
-            className={`tab-button ${activeTab === "technical" ? "active" : ""}`}
-            onClick={() => setActiveTab("technical")}
-          >
-            Technical
-          </button>
-          <button
-            className={`tab-button ${activeTab === "financial" ? "active" : ""}`}
-            onClick={() => setActiveTab("financial")}
-          >
-            Financial
-          </button>
-          <button
-            className={`tab-button ${activeTab === "chart" ? "active" : ""}`}
-            onClick={() => setActiveTab("chart")}
-          >
-            Chart
-          </button>
+          {Object.keys(tabs).map((tab) => (
+            <button
+              key={tab}
+              className={`tab-button ${activeTab === tab ? "active" : ""}`}
+              onClick={() => setActiveTab(tab)}
+            >
+              {tab.charAt(0).toUpperCase() + tab.slice(1)}
+            </button>
+          ))}
         </div>
 
         <div className="modal-body">
-          {renderTabContent()}
+          <div className="metrics-grid">
+            {tabs[activeTab].map((metric: any, index: number) => (
+              <div key={index} className="metric-item">
+                <span className="metric-label">{metric.label}</span>
+                <span
+                  className={`metric-value ${
+                    metric.colored
+                      ? metric.value >= 0
+                        ? "positive"
+                        : "negative"
+                      : ""
+                  }`}
+                >
+                  {formatValue(metric.value, metric.format)}
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
 
-        <div className="modal-footer">
-          <StockOrderModal stock={stock} />
+        {/* Chart Section */}
+        <div className="chart-section">
+          <StockChart symbol={stock.symbol} />
         </div>
+
+        {/* Sticky Footer with Trade CTA */}
+        <div className="modal-footer-sticky">
+          <button
+            className={`btn-watchlist ${isWatched ? "watched" : ""}`}
+            onClick={toggleWatchlist}
+          >
+            {isWatched ? "★ Watching" : "☆ Add to Watchlist"}
+          </button>
+          <button
+            className="btn-scroll-trade"
+            onClick={() => {
+              const modalContent = document.querySelector('.modal-content');
+              modalContent?.scrollTo({ top: modalContent.scrollHeight, behavior: 'smooth' });
+            }}
+          >
+            ↓ Jump to Trade
+          </button>
+        </div>
+
+        <StockOrderModal
+          stock={stock}
+          onClose={() => setShowTradeModal(false)}
+        />
       </div>
     </div>
   );
