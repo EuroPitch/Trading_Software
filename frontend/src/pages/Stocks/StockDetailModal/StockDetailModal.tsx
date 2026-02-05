@@ -1,13 +1,16 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import "./StockDetailModal.css";
 import StockOrderModal from "../StockOrderModal/StockOrderModal";
 import StockChart from "./components/StockChart";
-import { supabase } from "../../../supabaseClient";
+import { useWatchlist } from "../../../context/WatchlistContext";
 
 export default function StockDetailModal({ stock, onClose }: any) {
   const [activeTab, setActiveTab] = useState("valuation");
-  const [isWatched, setIsWatched] = useState(false);
   const [showTradeModal, setShowTradeModal] = useState(false);
+  const { watchlist, addToWatchlist, removeFromWatchlist } = useWatchlist();
+
+  // Check if stock is watched from context
+  const isWatched = watchlist.includes(stock.symbol);
 
   const formatValue = (value: any, format: string) => {
     if (value === null || value === undefined) return "-";
@@ -31,21 +34,6 @@ export default function StockDetailModal({ stock, onClose }: any) {
         return value;
     }
   };
-
-  useEffect(() => {
-    const checkWatchlist = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      const { data } = await supabase
-        .from('watchlist')
-        .select('id')
-        .eq('profile_id', user.id)
-        .eq('symbol', stock.symbol)
-        .maybeSingle();
-      setIsWatched(!!data);
-    };
-    checkWatchlist();
-  }, [stock.symbol]);
 
   const tabs: any = {
     valuation: [
@@ -81,29 +69,11 @@ export default function StockDetailModal({ stock, onClose }: any) {
   };
 
   const toggleWatchlist = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      alert("Please log in to use watchlist");
-      return;
-    }
-
     try {
       if (isWatched) {
-        await supabase
-          .from('watchlist')
-          .delete()
-          .eq('profile_id', user.id)
-          .eq('symbol', stock.symbol);
-        setIsWatched(false);
+        await removeFromWatchlist(stock.symbol);
       } else {
-        await supabase
-          .from('watchlist')
-          .insert({
-            profile_id: user.id,
-            symbol: stock.symbol,
-            name: stock.name || stock.symbol
-          });
-        setIsWatched(true);
+        await addToWatchlist(stock.symbol, stock.name || stock.symbol);
       }
     } catch (error) {
       console.error('Error toggling watchlist:', error);
