@@ -17,6 +17,7 @@ import {
 import "./Dashboard.css";
 import { supabase } from "../../supabaseClient";
 import { useAuth } from "../../context/AuthContext";
+import { useCompetitionScore } from "../../context/CompetitionScoreContext";
 
 type PERatioPoint = {
   symbol: string;
@@ -97,6 +98,8 @@ type CompetitionScore = {
 
 export default function Dashboard() {
   const { session, loading: authLoading } = useAuth();
+  const { setCompetitionScore: setContextCompetitionScore } =
+    useCompetitionScore();
   const navigate = useNavigate();
   const priceIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const isFetchingPricesRef = useRef(false);
@@ -143,7 +146,9 @@ export default function Dashboard() {
   const [peRatioError, setPeRatioError] = useState<string | null>(null);
   const [equityCurveData, setEquityCurveData] = useState<EquityDataPoint[]>([]);
   const [dailyPnLData, setDailyPnLData] = useState<DailyPnLDataPoint[]>([]);
-  const [allocationData, setAllocationData] = useState<AllocationDataPoint[]>([]);
+  const [allocationData, setAllocationData] = useState<AllocationDataPoint[]>(
+    [],
+  );
 
   const handleLogout = async () => {
     try {
@@ -196,20 +201,25 @@ export default function Dashboard() {
   );
 
   /** Daily realized P&L from trades: group by day, pnl = sum(SELL notional) - sum(BUY notional) per day */
-  const calculateDailyPnL = useCallback((trades: any[]): DailyPnLDataPoint[] => {
-    const byDay = new Map<string, number>();
-    (trades ?? []).forEach((t: any) => {
-      const date = new Date(t.placed_at ?? 0).toISOString().slice(0, 10);
-      const notional = Number(t.notional ?? Number(t.quantity ?? 0) * Number(t.price ?? 0));
-      const side = (t.side ?? "buy").toLowerCase();
-      const current = byDay.get(date) ?? 0;
-      if (side === "sell") byDay.set(date, current + notional);
-      else if (side === "buy") byDay.set(date, current - notional);
-    });
-    return Array.from(byDay.entries())
-      .map(([date, pnl]) => ({ date, pnl }))
-      .sort((a, b) => a.date.localeCompare(b.date));
-  }, []);
+  const calculateDailyPnL = useCallback(
+    (trades: any[]): DailyPnLDataPoint[] => {
+      const byDay = new Map<string, number>();
+      (trades ?? []).forEach((t: any) => {
+        const date = new Date(t.placed_at ?? 0).toISOString().slice(0, 10);
+        const notional = Number(
+          t.notional ?? Number(t.quantity ?? 0) * Number(t.price ?? 0),
+        );
+        const side = (t.side ?? "buy").toLowerCase();
+        const current = byDay.get(date) ?? 0;
+        if (side === "sell") byDay.set(date, current + notional);
+        else if (side === "buy") byDay.set(date, current - notional);
+      });
+      return Array.from(byDay.entries())
+        .map(([date, pnl]) => ({ date, pnl }))
+        .sort((a, b) => a.date.localeCompare(b.date));
+    },
+    [],
+  );
 
   const calculatePnL = useCallback(
     (position: Position, currentPrice: number): number => {
@@ -231,13 +241,19 @@ export default function Dashboard() {
     [],
   );
 
-  const [competitionScore, setCompetitionScore] = useState<CompetitionScore>({
-    returnScore: 0,
-    riskScore: 0,
-    consistencyScore: 0,
-    activityScore: 0,
-    totalScore: 0,
-  });
+  const [competitionScore, setCompetitionScoreLocal] =
+    useState<CompetitionScore>({
+      returnScore: 0,
+      riskScore: 0,
+      consistencyScore: 0,
+      activityScore: 0,
+      totalScore: 0,
+    });
+
+  const setCompetitionScore = (score: CompetitionScore) => {
+    setCompetitionScoreLocal(score);
+    setContextCompetitionScore(score);
+  };
 
   const fetchPrices = useCallback(
     async (symbols: string[]): Promise<Map<string, number>> => {
@@ -886,8 +902,7 @@ export default function Dashboard() {
             const allocation = aggregatedPositions
               .map((pos) => ({
                 symbol: pos.symbol,
-                value:
-                  Math.abs(pos.quantity) * (prices.get(pos.symbol) ?? 0),
+                value: Math.abs(pos.quantity) * (prices.get(pos.symbol) ?? 0),
               }))
               .filter((a) => a.value > 0);
             setAllocationData(allocation);
@@ -1173,6 +1188,7 @@ export default function Dashboard() {
         <div className="error">{error}</div>
       ) : (
         <>
+          {/* SECTION 1: Portfolio Summary (MOST CRITICAL) */}
           <div className="stats-grid">
             <div
               className={`stat-card highlight ${summary.totalPnLPercent >= 0 ? "positive" : "negative"}`}
@@ -1210,251 +1226,7 @@ export default function Dashboard() {
             </div>
           </div>
 
-          <section className="dashboard-charts">
-            <div className="chart-container chart-full-width">
-              <h2>Equity Curve</h2>
-              <ResponsiveContainer width="100%" height={300}>
-                <LineChart
-                  data={equityCurveData}
-                  margin={{ top: 8, right: 16, left: 8, bottom: 24 }}
-                >
-                  <CartesianGrid
-                    strokeDasharray="3 3"
-                    stroke="rgba(255, 255, 255, 0.1)"
-                  />
-                  <XAxis
-                    dataKey="date"
-                    stroke="rgba(255, 255, 255, 0.5)"
-                    tick={{
-                      fill: "rgba(255, 255, 255, 0.7)",
-                      fontSize: 11,
-                    }}
-                    tickFormatter={(value) => {
-                      const [y, m, d] = value.split("-");
-                      return d && m && y ? `${d}/${m}/${y}` : value;
-                    }}
-                  />
-                  <YAxis
-                    stroke="rgba(255, 255, 255, 0.5)"
-                    tick={{
-                      fill: "rgba(255, 255, 255, 0.7)",
-                      fontSize: 12,
-                    }}
-                    tickFormatter={(v) => formatCurrency(v)}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "rgba(20, 25, 35, 0.95)",
-                      border: "1px solid rgba(255, 255, 255, 0.1)",
-                      borderRadius: "8px",
-                      color: "#fff",
-                    }}
-                    labelFormatter={(value) => {
-                      const [y, m, d] = String(value).split("-");
-                      return d && m && y ? `${d}/${m}/${y}` : value;
-                    }}
-                    formatter={(value: number) => [
-                      formatCurrency(Number(value)),
-                      "Equity",
-                    ]}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="equity"
-                    stroke="var(--brand, #2e8cff)"
-                    strokeWidth={2}
-                    dot={{ r: 3 }}
-                    activeDot={{ r: 5 }}
-                    name="Equity"
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="chart-row">
-              <div className="chart-container">
-                <h2>Daily Realized P&L</h2>
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart
-                    data={dailyPnLData}
-                    margin={{ top: 8, right: 16, left: 8, bottom: 24 }}
-                  >
-                    <CartesianGrid
-                      strokeDasharray="3 3"
-                      stroke="rgba(255, 255, 255, 0.1)"
-                    />
-                    <XAxis
-                      dataKey="date"
-                      stroke="rgba(255, 255, 255, 0.5)"
-                      tick={{
-                        fill: "rgba(255, 255, 255, 0.7)",
-                        fontSize: 11,
-                      }}
-                      tickFormatter={(value) => {
-                        const [y, m, d] = value.split("-");
-                        return d && m && y ? `${d}/${m}/${y}` : value;
-                      }}
-                    />
-                    <YAxis
-                      stroke="rgba(255, 255, 255, 0.5)"
-                      tick={{
-                        fill: "rgba(255, 255, 255, 0.7)",
-                        fontSize: 12,
-                      }}
-                      tickFormatter={(v) => formatCurrency(Number(v))}
-                    />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: "rgba(20, 25, 35, 0.95)",
-                        border: "1px solid rgba(255, 255, 255, 0.1)",
-                        borderRadius: "8px",
-                        color: "#fff",
-                      }}
-                      content={({ active, payload, label }) => {
-                        if (!active || !payload?.length) return null;
-                        const value = Number(payload[0]?.value ?? 0);
-                        const dateStr = String(label ?? "");
-                        const [y, m, d] = dateStr.split("-");
-                        const dateFormatted =
-                          d && m && y ? `${d}/${m}/${y}` : dateStr;
-                        const valueColor =
-                          value >= 0
-                            ? "rgba(34, 197, 94, 1)"
-                            : "rgba(239, 68, 68, 1)";
-                        return (
-                          <div style={{ padding: "4px 8px" }}>
-                            <div style={{ color: "#fff", marginBottom: 4 }}>
-                              {dateFormatted}
-                            </div>
-                            <div style={{ color: valueColor, fontWeight: 600 }}>
-                              {formatCurrency(value)}
-                            </div>
-                          </div>
-                        );
-                      }}
-                    />
-                    <Bar dataKey="pnl" name="P&L" radius={[4, 4, 0, 0]}>
-                      {dailyPnLData.map((entry, index) => (
-                        <Cell
-                          key={`cell-${index}`}
-                          fill={
-                            entry.pnl >= 0
-                              ? "rgba(34, 197, 94, 0.9)"
-                              : "rgba(239, 68, 68, 0.9)"
-                          }
-                        />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-              <div className="chart-container">
-                <h2>Position Allocation</h2>
-                {allocationData.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={300}>
-                    <PieChart>
-                      <Pie
-                        data={allocationData}
-                        dataKey="value"
-                        nameKey="symbol"
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={60}
-                        outerRadius={100}
-                        paddingAngle={2}
-                        label={({ name, percent }: { name?: string; percent?: number }) =>
-                          `${name ?? ""} ${((percent ?? 0) * 100).toFixed(0)}%`
-                        }
-                      >
-                        {allocationData.map((_, index) => (
-                          <Cell
-                            key={`cell-${index}`}
-                            fill={
-                              [
-                                "#2e8cff",
-                                "#22c55e",
-                                "#eab308",
-                                "#ef4444",
-                                "#8b5cf6",
-                                "#ec4899",
-                                "#06b6d4",
-                                "#f97316",
-                              ][index % 8]
-                            }
-                          />
-                        ))}
-                      </Pie>
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: "rgba(20, 25, 35, 0.95)",
-                          border: "1px solid rgba(255, 255, 255, 0.1)",
-                          borderRadius: "8px",
-                          color: "#fff",
-                        }}
-                        labelStyle={{ color: "#fff" }}
-                        itemStyle={{ color: "#60a5fa" }}
-                        formatter={(value: number) => [
-                          formatCurrency(value),
-                          "Value",
-                        ]}
-                      />
-                    </PieChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="chart-empty">
-                    No positions with market value to display
-                  </div>
-                )}
-              </div>
-            </div>
-          </section>
-
-          <div className="competition-score-section">
-            <h2>Competition Score</h2>
-            <div className="stats-grid">
-              <div className="stat-card highlight">
-                <div className="stat-label">Total Competition Score</div>
-                <div className="stat-value">
-                  {competitionScore.totalScore}/100
-                </div>
-                <div className="stat-description">
-                  Your overall competition ranking score
-                </div>
-              </div>
-              <div className="stat-card">
-                <div className="stat-label">Return Score (40%)</div>
-                <div className="stat-value">{competitionScore.returnScore}</div>
-                <div className="stat-description">
-                  Based on total return vs initial capital
-                </div>
-              </div>
-              <div className="stat-card">
-                <div className="stat-label">Risk Score (30%)</div>
-                <div className="stat-value">{competitionScore.riskScore}</div>
-                <div className="stat-description">
-                  Sharpe ratio and drawdown management
-                </div>
-              </div>
-              <div className="stat-card">
-                <div className="stat-label">Consistency Score (20%)</div>
-                <div className="stat-value">
-                  {competitionScore.consistencyScore}
-                </div>
-                <div className="stat-description">
-                  Steady growth and low volatility
-                </div>
-              </div>
-              <div className="stat-card">
-                <div className="stat-label">Activity Score (10%)</div>
-                <div className="stat-value">
-                  {competitionScore.activityScore}
-                </div>
-                <div className="stat-description">
-                  Trading frequency and diversification
-                </div>
-              </div>
-            </div>
-          </div>
-
+          {/* SECTION 2: Active Positions (CRITICAL FOR TRADERS) */}
           {positions.length > 0 ? (
             <div className="positions-section">
               <h2>Active Positions</h2>
@@ -1543,116 +1315,141 @@ export default function Dashboard() {
             </div>
           )}
 
-          <div className="pe-ratios-section">
-            <h2>P/E Ratios</h2>
-            {peRatioError ? (
-              <p className="pe-ratios-error">{peRatioError}</p>
-            ) : peRatioData.length === 0 ? (
-              <p className="pe-ratios-empty">No P/E data available</p>
-            ) : (
-              <div className="pe-ratios-chart">
-                <ResponsiveContainer width="100%" height={320}>
-                  <BarChart
-                    data={peRatioData}
-                    margin={{ top: 12, right: 12, left: 12, bottom: 60 }}
-                  >
-                    <CartesianGrid
-                      strokeDasharray="3 3"
-                      stroke="rgba(255, 255, 255, 0.1)"
-                    />
-                    <XAxis
-                      dataKey="symbol"
-                      stroke="rgba(255, 255, 255, 0.5)"
-                      tick={{ fill: "rgba(255, 255, 255, 0.7)", fontSize: 12 }}
-                      angle={-45}
-                      textAnchor="end"
-                      height={60}
-                      interval={0}
-                    />
-                    <YAxis
-                      stroke="rgba(255, 255, 255, 0.5)"
-                      tick={{ fill: "rgba(255, 255, 255, 0.7)", fontSize: 12 }}
-                      label={{
-                        value: "P/E Ratio",
-                        angle: -90,
-                        position: "insideLeft",
-                        fill: "rgba(255, 255, 255, 0.7)",
-                      }}
-                    />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: "rgba(20, 25, 35, 0.95)",
-                        border: "1px solid rgba(255, 255, 255, 0.1)",
-                        borderRadius: "8px",
-                        color: "#fff",
-                      }}
-                      formatter={(value: number) => [
-                        Number(value).toFixed(2),
-                        "P/E",
-                      ]}
-                      labelFormatter={(symbol) => `Symbol: ${symbol}`}
-                    />
-                    <Bar
-                      dataKey="pe_ratio"
-                      fill="var(--brand, #2e8cff)"
-                      radius={[4, 4, 0, 0]}
-                      name="P/E"
-                    />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-          </div>
+          {/* SECTION 3: Performance Charts (IMPORTANT FOR ANALYSIS) */}
+          <section className="dashboard-charts">
+            <div className="chart-container chart-full-width">
+              <h2>Performance Curve</h2>
+              <ResponsiveContainer width="100%" height={300}>
+                <LineChart
+                  data={equityCurveData}
+                  margin={{ top: 8, right: 16, left: 8, bottom: 24 }}
+                >
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    stroke="rgba(255, 255, 255, 0.1)"
+                  />
+                  <XAxis
+                    dataKey="date"
+                    stroke="rgba(255, 255, 255, 0.5)"
+                    tick={{
+                      fill: "rgba(255, 255, 255, 0.7)",
+                      fontSize: 11,
+                    }}
+                    tickFormatter={(value) => {
+                      const [y, m, d] = value.split("-");
+                      return d && m && y ? `${d}/${m}/${y}` : value;
+                    }}
+                  />
+                  <YAxis
+                    stroke="rgba(255, 255, 255, 0.5)"
+                    tick={{
+                      fill: "rgba(255, 255, 255, 0.7)",
+                      fontSize: 12,
+                    }}
+                    tickFormatter={(v) => formatCurrency(v)}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: "rgba(20, 25, 35, 0.95)",
+                      border: "1px solid rgba(255, 255, 255, 0.1)",
+                      borderRadius: "8px",
+                      color: "#fff",
+                    }}
+                    labelFormatter={(value) => {
+                      const [y, m, d] = String(value).split("-");
+                      return d && m && y ? `${d}/${m}/${y}` : value;
+                    }}
+                    formatter={(value: number) => [
+                      formatCurrency(Number(value)),
+                      "Equity",
+                    ]}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="equity"
+                    stroke="var(--brand, #2e8cff)"
+                    strokeWidth={2}
+                    dot={{ r: 3 }}
+                    activeDot={{ r: 5 }}
+                    name="Equity"
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
 
-          <div className="watchlist-section">
-            <h2>Watchlist {watchlist.length > 0 && `(${watchlist.length})`}</h2>
-            {watchlist.length > 0 ? (
-              <div className="watchlist-grid">
-                {watchlist.map((symbol) => {
-                  const price = priceMap.get(symbol.toUpperCase()) || 0;
-                  const handleRemove = async () => {
-                    try {
-                      const {
-                        data: { user },
-                      } = await supabase.auth.getUser();
-                      if (user) {
-                        await supabase
-                          .from("watchlist")
-                          .delete()
-                          .eq("profile_id", user.id)
-                          .eq("symbol", symbol);
-                        setWatchlist(watchlist.filter((s) => s !== symbol));
-                      }
-                    } catch (err) {
-                      console.error("Error removing from watchlist:", err);
-                    }
-                  };
-                  return (
-                    <div key={symbol} className="watchlist-item">
-                      <div className="watchlist-item-header">
-                        <div className="watchlist-symbol">{symbol}</div>
-                        <button
-                          className="watchlist-remove-btn"
-                          onClick={handleRemove}
-                          title="Remove from watchlist"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                      <div className="watchlist-price">
-                        {formatCurrency(price)}
-                      </div>
-                    </div>
-                  );
-                })}
+            <div className="chart-row">
+              <div className="chart-container">
+                <h2>News Feed</h2>
+                <div className="chart-empty">Coming Soon!</div>
               </div>
-            ) : (
-              <div className="watchlist-empty">
-                <p>Your watchlist is empty. Add stocks to track them here.</p>
+              <div className="chart-container">
+                <h2>Position Allocation</h2>
+                {allocationData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={300}>
+                    <PieChart>
+                      <Pie
+                        data={allocationData}
+                        dataKey="value"
+                        nameKey="symbol"
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={60}
+                        outerRadius={100}
+                        paddingAngle={2}
+                        label={({
+                          name,
+                          percent,
+                        }: {
+                          name?: string;
+                          percent?: number;
+                        }) =>
+                          `${name ?? ""} ${((percent ?? 0) * 100).toFixed(0)}%`
+                        }
+                      >
+                        {allocationData.map((_, index) => (
+                          <Cell
+                            key={`cell-${index}`}
+                            fill={
+                              [
+                                "#2e8cff",
+                                "#22c55e",
+                                "#eab308",
+                                "#ef4444",
+                                "#8b5cf6",
+                                "#ec4899",
+                                "#06b6d4",
+                                "#f97316",
+                              ][index % 8]
+                            }
+                          />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: "rgba(20, 25, 35, 0.95)",
+                          border: "1px solid rgba(255, 255, 255, 0.1)",
+                          borderRadius: "8px",
+                          color: "#fff",
+                        }}
+                        labelStyle={{ color: "#fff" }}
+                        itemStyle={{ color: "#60a5fa" }}
+                        formatter={(value: number) => [
+                          formatCurrency(value),
+                          "Value",
+                        ]}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="chart-empty">
+                    No positions with market value to display
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+            </div>
+          </section>
 
+          {/* SECTION 5: Risk & Performance Metrics (ANALYTICAL) */}
           <div className="risk-metrics-section">
             <h2>Risk & Performance Metrics</h2>
             <div className="stats-grid">
@@ -1709,6 +1506,105 @@ export default function Dashboard() {
             </div>
           </div>
 
+          {/* SECTION 6: Competition Score (COMPARATIVE/RANKING) */}
+          <div className="competition-score-section">
+            <h2>Competition Score</h2>
+            <div className="stats-grid">
+              <div className="stat-card highlight">
+                <div className="stat-label">Total Competition Score</div>
+                <div className="stat-value">
+                  {competitionScore.totalScore}/100
+                </div>
+                <div className="stat-description">
+                  Your overall competition ranking score
+                </div>
+              </div>
+              <div className="stat-card">
+                <div className="stat-label">Return Score (40%)</div>
+                <div className="stat-value">{competitionScore.returnScore}</div>
+                <div className="stat-description">
+                  Based on total return vs initial capital
+                </div>
+              </div>
+              <div className="stat-card">
+                <div className="stat-label">Risk Score (30%)</div>
+                <div className="stat-value">{competitionScore.riskScore}</div>
+                <div className="stat-description">
+                  Sharpe ratio and drawdown management
+                </div>
+              </div>
+              <div className="stat-card">
+                <div className="stat-label">Consistency Score (20%)</div>
+                <div className="stat-value">
+                  {competitionScore.consistencyScore}
+                </div>
+                <div className="stat-description">
+                  Steady growth and low volatility
+                </div>
+              </div>
+              <div className="stat-card">
+                <div className="stat-label">Activity Score (10%)</div>
+                <div className="stat-value">
+                  {competitionScore.activityScore}
+                </div>
+                <div className="stat-description">
+                  Trading frequency and diversification
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* SECTION 7: Watchlist (SUPPLEMENTARY) */}
+          <div className="watchlist-section">
+            <h2>Watchlist {watchlist.length > 0 && `(${watchlist.length})`}</h2>
+            {watchlist.length > 0 ? (
+              <div className="watchlist-grid">
+                {watchlist.map((symbol) => {
+                  const price = priceMap.get(symbol.toUpperCase()) || 0;
+                  const handleRemove = async () => {
+                    try {
+                      const {
+                        data: { user },
+                      } = await supabase.auth.getUser();
+                      if (user) {
+                        await supabase
+                          .from("watchlist")
+                          .delete()
+                          .eq("profile_id", user.id)
+                          .eq("symbol", symbol);
+                        setWatchlist(watchlist.filter((s) => s !== symbol));
+                      }
+                    } catch (err) {
+                      console.error("Error removing from watchlist:", err);
+                    }
+                  };
+                  return (
+                    <div key={symbol} className="watchlist-item">
+                      <div className="watchlist-item-header">
+                        <div className="watchlist-symbol">{symbol}</div>
+                        <button
+                          className="watchlist-remove-btn"
+                          onClick={handleRemove}
+                          title="Remove from watchlist"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                      <div className="watchlist-price">
+                        {formatCurrency(price)}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="watchlist-empty">
+                <p>Your watchlist is empty. Add stocks to track them here.</p>
+              </div>
+            )}
+          </div>
+
+          {/* SECTION 4: Trading Statistics (OPERATIONAL DATA) */}
           <div className="trading-stats-section">
             <h2>Trading Statistics</h2>
             <table className="stats-table">
@@ -1758,6 +1654,7 @@ export default function Dashboard() {
             </table>
           </div>
 
+          {/* SECTION 8: Quick Actions (UTILITY) */}
           <div className="quick-actions">
             <h2>Quick Actions</h2>
             <div className="actions-grid">
