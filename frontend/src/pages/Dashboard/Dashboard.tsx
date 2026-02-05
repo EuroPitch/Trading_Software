@@ -158,6 +158,158 @@ export default function Dashboard() {
     }
   };
 
+  const handleClosePosition = async (position: Position) => {
+    const userId = session?.user?.id;
+    if (!userId) {
+      setError("User session not found");
+      return;
+    }
+
+    try {
+      const currentPrice =
+        priceMap.get(position.symbol.toUpperCase().trim()) ??
+        position.currentPrice;
+
+      // Create a closing trade (opposite side of the position)
+      const closingTrade = {
+        profile_id: userId,
+        symbol: position.symbol,
+        side: position.positionType === "LONG" ? "sell" : "buy",
+        quantity: Math.abs(position.quantity),
+        price: currentPrice,
+        order_type: "market",
+        placed_at: new Date().toISOString(),
+        filled_at: new Date().toISOString(),
+        status: "filled",
+        created_by: userId,
+      };
+
+      // Insert the closing trade
+      const { error: insertError } = await supabase
+        .from("trades")
+        .insert(closingTrade);
+
+      if (insertError) throw insertError;
+
+      // Now refresh the dashboard data (fetch all trades and recalculate)
+      // This is the same approach your StockOrderModal uses
+      const { data: allTrades, error: fetchError } = await supabase
+        .from("trades")
+        .select("*")
+        .eq("profile_id", userId)
+        .order("placed_at", { ascending: true });
+
+      if (fetchError) throw fetchError;
+
+      // Recalculate cash balance from ALL trades
+      let totalCostBasis = 0;
+      let totalProceeds = 0;
+
+      (allTrades ?? []).forEach((trade: any) => {
+        const side = (trade.side ?? "buy").toLowerCase();
+        const quantity = Number(trade.quantity ?? 0);
+        const price = Number(trade.price ?? 0);
+        const notional = Number(trade.notional ?? quantity * price);
+
+        if (side === "buy") {
+          totalCostBasis += notional;
+        } else if (side === "sell") {
+          totalProceeds += notional;
+        }
+      });
+
+      const calculatedCashBalance =
+        initialCapital - totalCostBasis + totalProceeds;
+      setCashBalance(calculatedCashBalance);
+
+      // Recalculate positions
+      const positionsMap = new Map<string, any>();
+      (allTrades ?? []).forEach((trade: any) => {
+        const symbol = (trade.symbol ?? "").toUpperCase().trim();
+        const side = (trade.side ?? "buy").toLowerCase();
+        const quantity = Number(trade.quantity ?? 0);
+        const price = Number(trade.price ?? 0);
+        const notional = Number(trade.notional ?? quantity * price);
+
+        if (!positionsMap.has(symbol)) {
+          positionsMap.set(symbol, {
+            symbol,
+            quantity: 0,
+            costBasis: 0,
+          });
+        }
+
+        const position = positionsMap.get(symbol)!;
+        if (side === "buy") {
+          position.quantity += quantity;
+          position.costBasis += notional;
+        } else if (side === "sell") {
+          position.quantity -= quantity;
+          if (position.quantity > 0) {
+            const avgCost = position.costBasis / (position.quantity + quantity);
+            position.costBasis = position.quantity * avgCost;
+          } else {
+            position.costBasis = 0;
+          }
+        }
+      });
+
+      const aggregatedPositions = Array.from(positionsMap.values()).filter(
+        (pos) => Math.abs(pos.quantity) > 0.0001,
+      );
+
+      // Update positions with current prices
+      const updatedPositions: Position[] = aggregatedPositions.map((pos) => {
+        const entryPrice =
+          pos.quantity !== 0
+            ? Math.abs(pos.costBasis) / Math.abs(pos.quantity)
+            : 0;
+        const currentPrice = priceMap.get(pos.symbol) ?? entryPrice;
+        const marketValue = Math.abs(pos.quantity) * currentPrice;
+
+        return {
+          symbol: pos.symbol,
+          name: pos.symbol,
+          quantity: pos.quantity,
+          costBasis: pos.costBasis,
+          currentPrice: currentPrice,
+          marketValue: marketValue,
+          entryPrice: entryPrice,
+          positionType: pos.quantity > 0 ? "LONG" : "SHORT",
+          priceStale: false,
+          unrealizedpnl: 0,
+        };
+      });
+
+      setPositions(updatedPositions);
+
+      // Recalculate summary
+      const totalMarketValue = updatedPositions.reduce(
+        (sum, p) => sum + p.marketValue,
+        0,
+      );
+      const totalEquity = calculatedCashBalance + totalMarketValue;
+      const totalPnL = totalEquity - initialCapital;
+      const totalReturn =
+        initialCapital > 0 ? (totalPnL / initialCapital) * 100 : 0;
+
+      setSummary({
+        totalValue: totalEquity,
+        totalPnL: totalPnL,
+        totalPnLPercent: totalReturn,
+        cashBalance: calculatedCashBalance,
+        initialCapital,
+        positionCount: updatedPositions.length,
+      });
+
+      setError(null);
+      console.log(`Position closed for ${position.symbol}`);
+    } catch (err: any) {
+      console.error("Error closing position:", err);
+      setError(`Failed to close position: ${err?.message || "Unknown error"}`);
+    }
+  };
+
   const formatCurrency = (value: number) =>
     new Intl.NumberFormat("en-US", {
       style: "currency",
@@ -1192,6 +1344,7 @@ export default function Dashboard() {
                       <th>Market Value</th>
                       <th>P&L ($)</th>
                       <th>P&L (%)</th>
+                      <th>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1242,6 +1395,15 @@ export default function Dashboard() {
                             className={`pnl-cell ${pnlPercent >= 0 ? "positive" : "negative"}`}
                           >
                             {formatPercent(pnlPercent)}
+                          </td>
+                          <td>
+                            <button
+                              className="close-position-button"
+                              onClick={() => handleClosePosition(position)}
+                              title={`Close ${position.symbol} position`}
+                            >
+                              Close
+                            </button>
                           </td>
                         </tr>
                       );
