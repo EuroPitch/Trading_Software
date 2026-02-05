@@ -64,19 +64,6 @@ def get_quotes(symbols: List[str] = Query(None)):
     data = service.get_snapshot(symbols)
     return {"data": data}
 
-@app.get("/equities/chart/{symbol}")
-def get_chart_data(symbol: str, timeframe: str = "1M"):
-    """
-    Returns historical price data for a stock.
-    Timeframe: 1D, 1W, 1M, 3M, 1Y, 5Y
-    """
-    try:
-        data = service.get_chart_data(symbol, timeframe)
-        return {"data": data, "symbol": symbol, "timeframe": timeframe}
-    except Exception as e:
-        logger.error(f"Error fetching chart data for {symbol}: {e}")
-        return {"error": f"Failed to fetch chart data: {str(e)}", "data": []}
-
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await service.manager.connect(websocket)
