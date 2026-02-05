@@ -159,7 +159,7 @@ export default function Dashboard() {
   const formatCurrency = (value: number) =>
     new Intl.NumberFormat("en-UK", {
       style: "currency",
-      currency: "EUR",
+      currency: "USD",
     }).format(value);
 
   const formatPercent = (value: number) =>
