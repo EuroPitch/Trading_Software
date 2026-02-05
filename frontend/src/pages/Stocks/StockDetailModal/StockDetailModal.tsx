@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
 import "./StockDetailModal.css";
 import StockOrderModal from "../StockOrderModal/StockOrderModal";
-import { supabase } from "../../../supabaseClient"; // ADD THIS IMPORT
+import StockChart from "./components/StockChart";
+import { supabase } from "../../../supabaseClient";
 
 export default function StockDetailModal({ stock, onClose }: any) {
   const [activeTab, setActiveTab] = useState("valuation");
@@ -94,7 +95,6 @@ export default function StockDetailModal({ stock, onClose }: any) {
 
     try {
       if (isWatched) {
-        // Remove from watchlist
         await supabase
           .from('watchlist')
           .delete()
@@ -102,7 +102,6 @@ export default function StockDetailModal({ stock, onClose }: any) {
           .eq('symbol', stock.symbol);
         setIsWatched(false);
       } else {
-        // Add to watchlist
         await supabase
           .from('watchlist')
           .insert({
@@ -118,31 +117,60 @@ export default function StockDetailModal({ stock, onClose }: any) {
     }
   };
 
+  const renderTabContent = () => {
+    if (activeTab === "chart") {
+      return <StockChart symbol={stock.symbol} />;
+    }
+
+    return (
+      <div className="metrics-grid">
+        {tabs[activeTab]?.map((metric: any, index: number) => (
+          <div key={index} className="metric-item">
+            <span className="metric-label">{metric.label}</span>
+            <span
+              className={`metric-value ${
+                metric.colored
+                  ? metric.value > 0
+                    ? "positive"
+                    : metric.value < 0
+                    ? "negative"
+                    : ""
+                  : ""
+              }`}
+            >
+              {formatValue(metric.value, metric.format)}
+            </span>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <div>
-            <h2>{stock.symbol}</h2>
-            <p className="modal-subtitle">{stock.name}</p>
+            <h2>{stock.name}</h2>
+            <p className="modal-subtitle">{stock.symbol}</p>
           </div>
-          <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-            <button 
-              className={`watchlist-btn ${isWatched ? 'watched' : ''}`}
-              onClick={toggleWatchlist}
-              title={isWatched ? "Remove from watchlist" : "Add to watchlist"}
-            >
-              {isWatched ? '★' : '☆'}
-            </button>
-            <button className="btn-modal-close" onClick={onClose}>
-              ×
-            </button>
-          </div>
+          <button className="btn-modal-close" onClick={onClose}>
+            ×
+          </button>
+        </div>
+
+        <div className="watchlist-toggle">
+          <button
+            className={`watchlist-btn ${isWatched ? 'watched' : ''}`}
+            onClick={toggleWatchlist}
+          >
+            {isWatched ? '★ Remove from Watchlist' : '☆ Add to Watchlist'}
+          </button>
         </div>
 
         <div className="stock-summary">
           <div className="summary-item">
-            <span className="summary-label">Current Price</span>
+            <span className="summary-label">Price</span>
             <span className="summary-value">
               {formatValue(stock.price, "currency")}
             </span>
@@ -151,65 +179,65 @@ export default function StockDetailModal({ stock, onClose }: any) {
             <span className="summary-label">Change</span>
             <span
               className={`summary-value ${
-                stock.change >= 0 ? "positive" : "negative"
+                stock.change > 0 ? "positive" : stock.change < 0 ? "negative" : ""
               }`}
             >
-              {formatValue(stock.change, "currency")}
+              {formatValue(stock.change, "currency")} ({formatValue(stock.changePercent, "percent")})
             </span>
           </div>
           <div className="summary-item">
-            <span className="summary-label">Change %</span>
-            <span
-              className={`summary-value ${
-                stock.changePercent >= 0 ? "positive" : "negative"
-              }`}
-            >
-              {formatValue(stock.changePercent, "percent")}
+            <span className="summary-label">Volume</span>
+            <span className="summary-value">
+              {stock.volume?.toLocaleString() || "-"}
             </span>
           </div>
         </div>
 
         <div className="modal-tabs">
-          {Object.keys(tabs).map((tab) => (
-            <button
-              key={tab}
-              className={`tab-button ${activeTab === tab ? "active" : ""}`}
-              onClick={() => setActiveTab(tab)}
-            >
-              {tab.charAt(0).toUpperCase() + tab.slice(1)}
-            </button>
-          ))}
           <button
-            className={`tab-button ${activeTab === "trade" ? "active" : ""}`}
-            onClick={() => setActiveTab("trade")}
+            className={`tab-button ${activeTab === "valuation" ? "active" : ""}`}
+            onClick={() => setActiveTab("valuation")}
           >
-            Trade
+            Valuation
+          </button>
+          <button
+            className={`tab-button ${activeTab === "profitability" ? "active" : ""}`}
+            onClick={() => setActiveTab("profitability")}
+          >
+            Profitability
+          </button>
+          <button
+            className={`tab-button ${activeTab === "growth" ? "active" : ""}`}
+            onClick={() => setActiveTab("growth")}
+          >
+            Growth
+          </button>
+          <button
+            className={`tab-button ${activeTab === "technical" ? "active" : ""}`}
+            onClick={() => setActiveTab("technical")}
+          >
+            Technical
+          </button>
+          <button
+            className={`tab-button ${activeTab === "financial" ? "active" : ""}`}
+            onClick={() => setActiveTab("financial")}
+          >
+            Financial
+          </button>
+          <button
+            className={`tab-button ${activeTab === "chart" ? "active" : ""}`}
+            onClick={() => setActiveTab("chart")}
+          >
+            Chart
           </button>
         </div>
 
         <div className="modal-body">
-          {activeTab === "trade" ? (
-            <StockOrderModal stock={stock} />
-          ) : (
-            <div className="metrics-grid">
-              {tabs[activeTab].map((metric: any, index: number) => (
-                <div key={index} className="metric-item">
-                  <span className="metric-label">{metric.label}</span>
-                  <span
-                    className={`metric-value ${
-                      metric.colored
-                        ? metric.value >= 0
-                          ? "positive"
-                          : "negative"
-                        : ""
-                    }`}
-                  >
-                    {formatValue(metric.value, metric.format)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
+          {renderTabContent()}
+        </div>
+
+        <div className="modal-footer">
+          <StockOrderModal stock={stock} />
         </div>
       </div>
     </div>
