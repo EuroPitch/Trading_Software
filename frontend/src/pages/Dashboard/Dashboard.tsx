@@ -3,8 +3,6 @@ import { Link, useNavigate } from "react-router-dom";
 import {
   LineChart,
   Line,
-  BarChart,
-  Bar,
   PieChart,
   Pie,
   Cell,
@@ -18,6 +16,7 @@ import "./Dashboard.css";
 import { supabase } from "../../supabaseClient";
 import { useAuth } from "../../context/AuthContext";
 import { useCompetitionScore } from "../../context/CompetitionScoreContext";
+import { useWatchlist } from "../../context/WatchlistContext";
 
 type PERatioPoint = {
   symbol: string;
@@ -98,6 +97,8 @@ type CompetitionScore = {
 
 export default function Dashboard() {
   const { session, loading: authLoading } = useAuth();
+  const { removeFromWatchlist } = useWatchlist();
+  const [watchlist, setWatchlist] = useState<string[]>([]);
   const { setCompetitionScore: setContextCompetitionScore } =
     useCompetitionScore();
   const navigate = useNavigate();
@@ -111,7 +112,6 @@ export default function Dashboard() {
   const [priceMap, setPriceMap] = useState<Map<string, number>>(new Map());
   const [initialCapital, setInitialCapital] = useState(100000);
   const [cashBalance, setCashBalance] = useState(0);
-  const [watchlist, setWatchlist] = useState<string[]>([]);
   const [summary, setSummary] = useState<PortfolioSummary>({
     totalValue: 0,
     totalPnL: 0,
@@ -142,10 +142,7 @@ export default function Dashboard() {
     beta: 0,
   });
   const [societyName, setSocietyName] = useState("Society");
-  const [peRatioData, setPeRatioData] = useState<PERatioPoint[]>([]);
-  const [peRatioError, setPeRatioError] = useState<string | null>(null);
   const [equityCurveData, setEquityCurveData] = useState<EquityDataPoint[]>([]);
-  const [dailyPnLData, setDailyPnLData] = useState<DailyPnLDataPoint[]>([]);
   const [allocationData, setAllocationData] = useState<AllocationDataPoint[]>(
     [],
   );
@@ -162,7 +159,7 @@ export default function Dashboard() {
   };
 
   const formatCurrency = (value: number) =>
-    new Intl.NumberFormat("en-UK", {
+    new Intl.NumberFormat("en-US", {
       style: "currency",
       currency: "USD",
     }).format(value);
@@ -342,22 +339,6 @@ export default function Dashboard() {
     },
     [],
   );
-
-  const fetchWatchlist = useCallback(async (userId: string) => {
-    try {
-      const { data, error } = await supabase
-        .from("watchlist")
-        .select("symbol")
-        .eq("profile_id", userId);
-
-      if (error) throw error;
-
-      const symbols = data?.map((item) => item.symbol) || [];
-      setWatchlist(symbols);
-    } catch (err) {
-      console.error("Error fetching watchlist:", err);
-    }
-  }, []);
 
   const calculatePnLForDisplay = useCallback(
     (position: Position) => {
@@ -608,381 +589,376 @@ export default function Dashboard() {
       return;
     }
 
-    const fetchDashboardData = async () => {
-      console.log("🚀 Initializing dashboard...");
-      setLoading(true);
-      setError(null);
+  const fetchDashboardData = async () => {
+    console.log("🚀 Initializing dashboard...");
+    setLoading(true);
+    setError(null);
+
+    try {
+      const userId = session?.user?.id;
+      if (!userId) {
+        setLoading(false);
+        return;
+      }
+
+      hasInitializedRef.current = true;
+
+      let initialCapital = 100000;
+      let fetchedSocietyName = "Society";
 
       try {
-        const userId = session?.user?.id;
-        if (!userId) {
-          setLoading(false);
-          return;
+        const { data: profileData } = await supabase
+          .from("profiles")
+          .select("society_name, initial_capital")
+          .eq("id", userId)
+          .single();
+
+        if (profileData?.initial_capital) {
+          initialCapital = Number(profileData.initial_capital);
         }
 
-        hasInitializedRef.current = true;
-
-        let initialCapital = 100000;
-        let fetchedSocietyName = "Society";
-
-        try {
-          const { data: profileData } = await supabase
-            .from("profiles")
-            .select("society_name, initial_capital")
-            .eq("id", userId)
-            .single();
-
-          if (profileData?.initial_capital) {
-            initialCapital = Number(profileData.initial_capital);
-          }
-
-          if (profileData?.society_name) {
-            fetchedSocietyName = profileData.society_name;
-            setSocietyName(fetchedSocietyName);
-          }
-        } catch (err) {
-          console.warn("Could not fetch profile data, using defaults");
+        if (profileData?.society_name) {
+          fetchedSocietyName = profileData.society_name;
+          setSocietyName(fetchedSocietyName);
         }
+      } catch (err) {
+        console.warn("Could not fetch profile data, using defaults");
+      }
 
-        // Fetch historical snapshots for risk calculations (last 90 days)
-        try {
-          const { data: snapshotsData } = await supabase
-            .from("portfolio_snapshots")
-            .select("*")
-            .eq("profile_id", userId)
-            .order("timestamp", { ascending: true })
-            .limit(2000); // ~90 days of hourly data
-
-          if (snapshotsData && snapshotsData.length > 0) {
-            portfolioSnapshotsRef.current = snapshotsData.map((s: any) => ({
-              timestamp: new Date(s.timestamp),
-              totalEquity: Number(s.total_equity),
-              dailyReturn: Number(s.daily_return ?? 0),
-            }));
-            console.log(
-              `📊 Loaded ${portfolioSnapshotsRef.current.length} historical snapshots`,
-            );
-          }
-        } catch (err) {
-          console.warn(
-            "Could not fetch portfolio snapshots, risk metrics will be limited",
-          );
-        }
-
-        const { data: tradesData, error: fetchError } = await supabase
-          .from("trades")
+      // Fetch historical snapshots for risk calculations (last 90 days)
+      try {
+        const { data: snapshotsData } = await supabase
+          .from("portfolio_snapshots")
           .select("*")
           .eq("profile_id", userId)
-          .order("placed_at", { ascending: true });
+          .order("timestamp", { ascending: true })
+          .limit(2000);
 
-        if (fetchError) throw fetchError;
+        if (snapshotsData && snapshotsData.length > 0) {
+          portfolioSnapshotsRef.current = snapshotsData.map((s: any) => ({
+            timestamp: new Date(s.timestamp),
+            totalEquity: Number(s.total_equity),
+            dailyReturn: Number(s.daily_return ?? 0),
+          }));
+          console.log(
+            `📊 Loaded ${portfolioSnapshotsRef.current.length} historical snapshots`,
+          );
+        }
+      } catch (err) {
+        console.warn(
+          "Could not fetch portfolio snapshots, risk metrics will be limited",
+        );
+      }
 
-        const trades = tradesData ?? [];
-        const symbolNameMap = new Map<string, string>();
+      const { data: tradesData, error: fetchError } = await supabase
+        .from("trades")
+        .select("*")
+        .eq("profile_id", userId)
+        .order("placed_at", { ascending: true });
 
-        let totalCostBasis = 0;
-        let totalProceeds = 0;
+      if (fetchError) throw fetchError;
 
-        trades.forEach((trade: any) => {
-          const side = (trade.side ?? "buy").toLowerCase();
-          const quantity = Number(trade.quantity ?? 0);
-          const price = Number(trade.price ?? 0);
-          const notional = Number(trade.notional ?? quantity * price);
+      const trades = tradesData ?? [];
+      const symbolNameMap = new Map<string, string>();
 
-          if (side === "buy") {
-            totalCostBasis += notional;
-          } else if (side === "sell") {
-            totalProceeds += notional;
-          }
-        });
+      let totalCostBasis = 0;
+      let totalProceeds = 0;
 
-        const calculatedCashBalance =
-          initialCapital - totalCostBasis + totalProceeds;
+      trades.forEach((trade: any) => {
+        const side = (trade.side ?? "buy").toLowerCase();
+        const quantity = Number(trade.quantity ?? 0);
+        const price = Number(trade.price ?? 0);
+        const notional = Number(trade.notional ?? quantity * price);
 
-        setEquityCurveData(calculateEquityCurve(trades, initialCapital));
-        setDailyPnLData(calculateDailyPnL(trades));
+        if (side === "buy") {
+          totalCostBasis += notional;
+        } else if (side === "sell") {
+          totalProceeds += notional;
+        }
+      });
 
-        const positionsMap = new Map<string, any>();
+      const calculatedCashBalance =
+        initialCapital - totalCostBasis + totalProceeds;
 
-        trades.forEach((trade: any) => {
-          const symbol = (trade.symbol ?? "").toUpperCase().trim();
-          const side = (trade.side ?? "buy").toLowerCase();
-          const quantity = Number(trade.quantity ?? 0);
-          const price = Number(trade.price ?? 0);
-          const notional = Number(trade.notional ?? quantity * price);
+      setEquityCurveData(calculateEquityCurve(trades, initialCapital));
 
-          if (trade.name) {
-            symbolNameMap.set(symbol, trade.name);
-          }
+      const positionsMap = new Map<string, any>();
 
-          if (!positionsMap.has(symbol)) {
-            positionsMap.set(symbol, {
-              symbol,
-              quantity: 0,
-              costBasis: 0,
-              entryPrice: 0,
-              positionType: "LONG",
-            });
-          }
+      trades.forEach((trade: any) => {
+        const symbol = (trade.symbol ?? "").toUpperCase().trim();
+        const side = (trade.side ?? "buy").toLowerCase();
+        const quantity = Number(trade.quantity ?? 0);
+        const price = Number(trade.price ?? 0);
+        const notional = Number(trade.notional ?? quantity * price);
 
-          const position = positionsMap.get(symbol)!;
+        if (trade.name) {
+          symbolNameMap.set(symbol, trade.name);
+        }
 
-          if (side === "buy") {
-            position.quantity += quantity;
-            position.costBasis += notional;
-          } else if (side === "sell") {
-            const oldQuantity = position.quantity;
-            const oldCostBasis = position.costBasis;
-            position.quantity -= quantity;
+        if (!positionsMap.has(symbol)) {
+          positionsMap.set(symbol, {
+            symbol,
+            quantity: 0,
+            costBasis: 0,
+            entryPrice: 0,
+            positionType: "LONG",
+          });
+        }
 
-            if (oldQuantity > 0 && position.quantity >= 0) {
-              if (oldQuantity > 0) {
-                const avgCost = oldCostBasis / oldQuantity;
-                position.costBasis = position.quantity * avgCost;
-              } else {
-                position.costBasis = 0;
-              }
-            } else if (oldQuantity > 0 && position.quantity < 0) {
-              position.costBasis = Math.abs(position.quantity) * price;
-            } else if (oldQuantity <= 0) {
-              position.costBasis += notional;
+        const position = positionsMap.get(symbol)!;
+
+        if (side === "buy") {
+          position.quantity += quantity;
+          position.costBasis += notional;
+        } else if (side === "sell") {
+          const oldQuantity = position.quantity;
+          const oldCostBasis = position.costBasis;
+          position.quantity -= quantity;
+
+          if (oldQuantity > 0 && position.quantity >= 0) {
+            if (oldQuantity > 0) {
+              const avgCost = oldCostBasis / oldQuantity;
+              position.costBasis = position.quantity * avgCost;
+            } else {
+              position.costBasis = 0;
             }
+          } else if (oldQuantity > 0 && position.quantity < 0) {
+            position.costBasis = Math.abs(position.quantity) * price;
+          } else if (oldQuantity <= 0) {
+            position.costBasis += notional;
           }
-        });
+        }
+      });
 
-        const aggregatedPositions = Array.from(positionsMap.values()).filter(
-          (pos) => Math.abs(pos.quantity) > 0.0001,
-        );
+      const aggregatedPositions = Array.from(positionsMap.values()).filter(
+        (pos) => Math.abs(pos.quantity) > 0.0001,
+      );
 
-        setInitialCapital(initialCapital);
-        setCashBalance(calculatedCashBalance);
+      setInitialCapital(initialCapital);
+      setCashBalance(calculatedCashBalance);
 
-        // Fetch watchlist and get symbols directly
-        const { data: watchlistData } = await supabase
-          .from("watchlist")
-          .select("symbol")
-          .eq("profile_id", userId);
+      // ✅ FETCH WATCHLIST DIRECTLY FROM SUPABASE (FAST!)
+      const { data: watchlistData } = await supabase
+        .from("watchlist")
+        .select("symbol")
+        .eq("profile_id", userId);
 
-        const watchlistSymbols =
-          watchlistData?.map((item) => item.symbol) || [];
-        setWatchlist(watchlistSymbols);
+      const watchlistSymbols = watchlistData?.map((item) => item.symbol) || [];
+      setWatchlist(watchlistSymbols);
 
-        // Combine position symbols + watchlist symbols
-        const positionSymbols = aggregatedPositions.map((p) => p.symbol);
-        const symbols = [...new Set([...positionSymbols, ...watchlistSymbols])];
-        console.log(
-          `Fetching prices for ${positionSymbols.length} positions + ${watchlistSymbols.length} watchlist stocks...`,
-        );
+      // Combine position symbols + watchlist symbols
+      const positionSymbols = aggregatedPositions.map((p) => p.symbol);
+      const symbols = [...new Set([...positionSymbols, ...watchlistSymbols])];
+      console.log(
+        `📊 Fetching prices for ${positionSymbols.length} positions + ${watchlistSymbols.length} watchlist stocks`,
+      );
 
-        console.log(
-          `📊 Fetching prices for ${positionSymbols.length} positions + ${watchlist.length} watchlist stocks`,
-        );
+      const detailedPositions: Position[] = aggregatedPositions.map((pos) => {
+        const entryPrice =
+          pos.quantity !== 0
+            ? Math.abs(pos.costBasis) / Math.abs(pos.quantity)
+            : 0;
+        const lastKnownPrice = lastKnownPricesRef.current.get(pos.symbol);
+        const currentPrice =
+          lastKnownPrice && lastKnownPrice > 0 ? lastKnownPrice : entryPrice;
+        const priceStale = !lastKnownPrice || lastKnownPrice === 0;
+        const marketValue = Math.abs(pos.quantity) * currentPrice;
 
-        const detailedPositions: Position[] = aggregatedPositions.map((pos) => {
-          const entryPrice =
-            pos.quantity !== 0
-              ? Math.abs(pos.costBasis) / Math.abs(pos.quantity)
-              : 0;
-          const lastKnownPrice = lastKnownPricesRef.current.get(pos.symbol);
-          const currentPrice =
-            lastKnownPrice && lastKnownPrice > 0 ? lastKnownPrice : entryPrice;
-          const priceStale = !lastKnownPrice || lastKnownPrice === 0;
-          const marketValue = Math.abs(pos.quantity) * currentPrice;
+        return {
+          symbol: pos.symbol,
+          name: symbolNameMap.get(pos.symbol) || pos.symbol,
+          quantity: pos.quantity,
+          costBasis: pos.costBasis,
+          currentPrice: currentPrice,
+          marketValue: marketValue,
+          entryPrice: entryPrice,
+          positionType: pos.quantity > 0 ? "LONG" : "SHORT",
+          priceStale: priceStale,
+          unrealized_pnl: 0,
+        };
+      });
 
-          return {
-            symbol: pos.symbol,
-            name: symbolNameMap.get(pos.symbol) || pos.symbol,
-            quantity: pos.quantity,
-            costBasis: pos.costBasis,
-            currentPrice: currentPrice,
-            marketValue: marketValue,
-            entryPrice: entryPrice,
-            positionType: pos.quantity > 0 ? "LONG" : "SHORT",
-            priceStale: priceStale,
-            unrealized_pnl: 0,
-          };
-        });
+      setPositions(detailedPositions);
 
-        setPositions(detailedPositions);
+      let totalMarketValue = 0;
+      detailedPositions.forEach((pos) => {
+        totalMarketValue += pos.marketValue;
+      });
 
-        let totalMarketValue = 0;
-        detailedPositions.forEach((pos) => {
-          totalMarketValue += pos.marketValue;
-        });
+      const totalEquityCalculated = calculatedCashBalance + totalMarketValue;
+      const totalPnLCalculated = totalEquityCalculated - initialCapital;
+      const totalReturn =
+        initialCapital === 0
+          ? 0
+          : (totalPnLCalculated / initialCapital) * 100;
 
-        const totalEquityCalculated = calculatedCashBalance + totalMarketValue;
-        const totalPnLCalculated = totalEquityCalculated - initialCapital;
-        const totalReturn =
-          initialCapital === 0
-            ? 0
-            : (totalPnLCalculated / initialCapital) * 100;
+      setSummary({
+        totalValue: totalEquityCalculated,
+        totalPnL: totalPnLCalculated,
+        totalPnLPercent: totalReturn,
+        cashBalance: calculatedCashBalance,
+        initialCapital,
+        positionCount: detailedPositions.length,
+      });
 
-        setSummary({
-          totalValue: totalEquityCalculated,
-          totalPnL: totalPnLCalculated,
-          totalPnLPercent: totalReturn,
-          cashBalance: calculatedCashBalance,
-          initialCapital,
-          positionCount: detailedPositions.length,
-        });
+      calculateRiskMetrics(
+        portfolioSnapshotsRef.current,
+        totalEquityCalculated,
+        initialCapital,
+      );
 
-        // Calculate risk metrics
-        calculateRiskMetrics(
-          portfolioSnapshotsRef.current,
-          totalEquityCalculated,
-          initialCapital,
-        );
+      const buyTrades = trades.filter(
+        (t: any) => (t.side ?? "buy").toLowerCase() === "buy",
+      ).length;
+      const sellTrades = trades.filter(
+        (t: any) => (t.side ?? "sell").toLowerCase() === "sell",
+      ).length;
+      const totalVolume = trades.reduce(
+        (sum: number, t: any) => sum + Math.abs(Number(t.quantity ?? 0)),
+        0,
+      );
+      const totalNotional = trades.reduce(
+        (sum: number, t: any) =>
+          sum +
+          Number(
+            t.notional ?? Number(t.quantity ?? 0) * Number(t.price ?? 0),
+          ),
+        0,
+      );
+      const averageTradeSize =
+        trades.length > 0 ? totalNotional / trades.length : 0;
 
-        const buyTrades = trades.filter(
-          (t: any) => (t.side ?? "buy").toLowerCase() === "buy",
-        ).length;
-        const sellTrades = trades.filter(
-          (t: any) => (t.side ?? "sell").toLowerCase() === "sell",
-        ).length;
-        const totalVolume = trades.reduce(
-          (sum: number, t: any) => sum + Math.abs(Number(t.quantity ?? 0)),
-          0,
-        );
-        const totalNotional = trades.reduce(
-          (sum: number, t: any) =>
-            sum +
-            Number(
-              t.notional ?? Number(t.quantity ?? 0) * Number(t.price ?? 0),
-            ),
-          0,
-        );
-        const averageTradeSize =
-          trades.length > 0 ? totalNotional / trades.length : 0;
+      const stockCounts = new Map<string, number>();
+      trades.forEach((t: any) => {
+        const symbol = t.symbol ?? "";
+        if (symbol) {
+          stockCounts.set(symbol, (stockCounts.get(symbol) ?? 0) + 1);
+        }
+      });
 
-        const stockCounts = new Map<string, number>();
-        trades.forEach((t: any) => {
-          const symbol = t.symbol ?? "";
-          if (symbol) {
-            stockCounts.set(symbol, (stockCounts.get(symbol) ?? 0) + 1);
-          }
-        });
+      let mostTradedStock = "-";
+      let mostTradedCount = 0;
+      stockCounts.forEach((count, symbol) => {
+        if (count > mostTradedCount) {
+          mostTradedCount = count;
+          mostTradedStock = symbol;
+        }
+      });
 
-        let mostTradedStock = "-";
-        let mostTradedCount = 0;
-        stockCounts.forEach((count, symbol) => {
-          if (count > mostTradedCount) {
-            mostTradedCount = count;
-            mostTradedStock = symbol;
-          }
-        });
+      const now = new Date();
+      const today = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate(),
+      );
+      const weekAgo = new Date(today);
+      weekAgo.setDate(weekAgo.getDate() - 7);
 
-        const now = new Date();
-        const today = new Date(
-          now.getFullYear(),
-          now.getMonth(),
-          now.getDate(),
-        );
-        const weekAgo = new Date(today);
-        weekAgo.setDate(weekAgo.getDate() - 7);
+      const tradesToday = trades.filter((t: any) => {
+        const tradeDate = new Date(t.placed_at ?? t.filled_at ?? "");
+        return tradeDate >= today;
+      }).length;
 
-        const tradesToday = trades.filter((t: any) => {
-          const tradeDate = new Date(t.placed_at ?? t.filled_at ?? "");
-          return tradeDate >= today;
-        }).length;
+      const tradesThisWeek = trades.filter((t: any) => {
+        const tradeDate = new Date(t.placed_at ?? t.filled_at ?? "");
+        return tradeDate >= weekAgo;
+      }).length;
 
-        const tradesThisWeek = trades.filter((t: any) => {
-          const tradeDate = new Date(t.placed_at ?? t.filled_at ?? "");
-          return tradeDate >= weekAgo;
-        }).length;
+      setTradingStats({
+        totalTrades: trades.length,
+        buyTrades,
+        sellTrades,
+        totalVolume,
+        averageTradeSize,
+        mostTradedStock,
+        mostTradedCount,
+        tradesToday,
+        tradesThisWeek,
+        totalNotional,
+      });
 
-        setTradingStats({
-          totalTrades: trades.length,
-          buyTrades,
-          sellTrades,
-          totalVolume,
-          averageTradeSize,
-          mostTradedStock,
-          mostTradedCount,
-          tradesToday,
-          tradesThisWeek,
-          totalNotional,
-        });
+      console.log("🔄 Fetching initial prices (non-blocking)...");
+      if (symbols.length > 0) {
+        const prices = await fetchPrices(symbols);
+        if (prices.size > 0) {
+          setPriceMap(prices);
+          
+          // Calculate allocation data
+          const allocation = aggregatedPositions
+            .map((pos) => ({
+              symbol: pos.symbol,
+              value: Math.abs(pos.quantity) * (prices.get(pos.symbol) ?? 0),
+            }))
+            .filter((a) => a.value > 0);
+          setAllocationData(allocation);
 
-        console.log("🔄 Fetching initial prices (non-blocking)...");
-        if (symbols.length > 0) {
+          const updatedPositions = detailedPositions.map((pos) => {
+            const freshPrice = prices.get(pos.symbol);
+            if (freshPrice && freshPrice > 0) {
+              return {
+                ...pos,
+                currentPrice: freshPrice,
+                marketValue: Math.abs(pos.quantity) * freshPrice,
+                priceStale: false,
+              };
+            }
+            return pos;
+          });
+
+          setPositions(updatedPositions);
+
+          let updatedTotalMarketValue = 0;
+          updatedPositions.forEach((pos) => {
+            updatedTotalMarketValue += pos.marketValue;
+          });
+
+          const updatedTotalEquity =
+            calculatedCashBalance + updatedTotalMarketValue;
+          const updatedTotalPnLCalc = updatedTotalEquity - initialCapital;
+          const updatedTotalReturn =
+            initialCapital === 0
+              ? 0
+              : (updatedTotalPnLCalc / initialCapital) * 100;
+
+          setSummary({
+            totalValue: updatedTotalEquity,
+            totalPnL: updatedTotalPnLCalc,
+            totalPnLPercent: updatedTotalReturn,
+            cashBalance: calculatedCashBalance,
+            initialCapital,
+            positionCount: updatedPositions.length,
+          });
+
+          calculateRiskMetrics(
+            portfolioSnapshotsRef.current,
+            updatedTotalEquity,
+            initialCapital,
+          );
+        }
+      }
+
+      if (priceIntervalRef.current) {
+        clearInterval(priceIntervalRef.current);
+      }
+
+      if (symbols.length > 0) {
+        priceIntervalRef.current = setInterval(async () => {
+          console.log("⏰ Polling prices...");
           const prices = await fetchPrices(symbols);
           if (prices.size > 0) {
             setPriceMap(prices);
-            const allocation = aggregatedPositions
-              .map((pos) => ({
-                symbol: pos.symbol,
-                value: Math.abs(pos.quantity) * (prices.get(pos.symbol) ?? 0),
-              }))
-              .filter((a) => a.value > 0);
-            setAllocationData(allocation);
-
-            const updatedPositions = detailedPositions.map((pos) => {
-              const freshPrice = prices.get(pos.symbol);
-              if (freshPrice && freshPrice > 0) {
-                return {
-                  ...pos,
-                  currentPrice: freshPrice,
-                  marketValue: Math.abs(pos.quantity) * freshPrice,
-                  priceStale: false,
-                };
-              }
-              return pos;
-            });
-
-            setPositions(updatedPositions);
-
-            let updatedTotalMarketValue = 0;
-            updatedPositions.forEach((pos) => {
-              updatedTotalMarketValue += pos.marketValue;
-            });
-
-            const updatedTotalEquity =
-              calculatedCashBalance + updatedTotalMarketValue;
-            const updatedTotalPnLCalc = updatedTotalEquity - initialCapital;
-            const updatedTotalReturn =
-              initialCapital === 0
-                ? 0
-                : (updatedTotalPnLCalc / initialCapital) * 100;
-
-            setSummary({
-              totalValue: updatedTotalEquity,
-              totalPnL: updatedTotalPnLCalc,
-              totalPnLPercent: updatedTotalReturn,
-              cashBalance: calculatedCashBalance,
-              initialCapital,
-              positionCount: updatedPositions.length,
-            });
-
-            calculateRiskMetrics(
-              portfolioSnapshotsRef.current,
-              updatedTotalEquity,
-              initialCapital,
-            );
           }
-        }
-
-        if (priceIntervalRef.current) {
-          clearInterval(priceIntervalRef.current);
-        }
-
-        if (symbols.length > 0) {
-          priceIntervalRef.current = setInterval(async () => {
-            console.log("⏰ Polling prices...");
-            const prices = await fetchPrices(symbols);
-            if (prices.size > 0) {
-              setPriceMap(prices);
-            }
-          }, 30_000);
-        }
-      } catch (err: any) {
-        console.error("Error fetching dashboard data:", err?.message ?? err);
-        setError(
-          err?.message ?? "An error occurred while fetching dashboard data",
-        );
-      } finally {
-        setLoading(false);
+        }, 30_000);
       }
-    };
+    } catch (err: any) {
+      console.error("Error fetching dashboard data:", err?.message ?? err);
+      setError(
+        err?.message ?? "An error occurred while fetching dashboard data",
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
 
     if (!authLoading && session?.user?.id) {
       fetchDashboardData();
@@ -1088,45 +1064,9 @@ export default function Dashboard() {
   useEffect(() => {
     const userId = session?.user?.id;
     if (userId && !loading) {
-      fetchWatchlist(userId);
+      const watchlistSymbols = watchlist;
     }
-  }, [session?.user?.id, fetchWatchlist, loading]);
-
-  // Fetch P/E ratios from Supabase fundamentals (once on load, no polling)
-  useEffect(() => {
-    let cancelled = false;
-    setPeRatioError(null);
-    (async () => {
-      try {
-        const { data, error } = await supabase
-          .from("fundamentals")
-          .select("symbol, pe_ratio")
-          .not("pe_ratio", "is", null)
-          .order("symbol", { ascending: true });
-        if (cancelled) return;
-        if (error) {
-          setPeRatioError("P/E data unavailable");
-          setPeRatioData([]);
-          return;
-        }
-        const rows = (data ?? []).filter(
-          (r): r is PERatioPoint =>
-            typeof r?.symbol === "string" &&
-            typeof r?.pe_ratio === "number" &&
-            Number.isFinite(r.pe_ratio),
-        );
-        setPeRatioData(rows);
-      } catch {
-        if (!cancelled) {
-          setPeRatioError("P/E data unavailable");
-          setPeRatioData([]);
-        }
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  }, [session?.user?.id, watchlist, loading]);
 
   // Competition scoring useEffect
   useEffect(() => {
@@ -1571,23 +1511,7 @@ export default function Dashboard() {
               <div className="watchlist-grid">
                 {watchlist.map((symbol) => {
                   const price = priceMap.get(symbol.toUpperCase()) || 0;
-                  const handleRemove = async () => {
-                    try {
-                      const {
-                        data: { user },
-                      } = await supabase.auth.getUser();
-                      if (user) {
-                        await supabase
-                          .from("watchlist")
-                          .delete()
-                          .eq("profile_id", user.id)
-                          .eq("symbol", symbol);
-                        setWatchlist(watchlist.filter((s) => s !== symbol));
-                      }
-                    } catch (err) {
-                      console.error("Error removing from watchlist:", err);
-                    }
-                  };
+                  const handleRemove = () => removeFromWatchlist(symbol);
                   return (
                     <div key={symbol} className="watchlist-item">
                       <div className="watchlist-item-header">
