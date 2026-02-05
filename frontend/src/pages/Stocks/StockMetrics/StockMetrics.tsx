@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import StockDetailModal from "../StockDetailModal/StockDetailModal";
-import ComparisonPanel from "../ComparisonPanel/ComparisonPanel";
 import "./StockMetrics.css";
 
 // TypeScript Interfaces
@@ -629,12 +628,6 @@ function StockMetricsContent() {
             </div>
           </div>
           <div className="header-actions">
-            <button
-              className={`btn-compare ${compareMode ? "active" : ""}`}
-              onClick={() => setCompareMode(!compareMode)}
-            >
-              {compareMode ? "Exit Compare Mode" : "Compare Stocks"}
-            </button>
             <button className="btn-secondary" onClick={() => setShowColumnCustomizer(!showColumnCustomizer)}>
               Customise Columns
             </button>
@@ -781,16 +774,6 @@ function StockMetricsContent() {
           ))
         )}
       </div>
-
-      {compareMode && selectedForCompare.length > 0 && (
-        <ComparisonPanel
-          stocks={stocks.filter((s) => selectedForCompare.includes(s.id))}
-          onClose={() => {
-            setCompareMode(false);
-            setSelectedForCompare([]);
-          }}
-        />
-      )}
 
       {selectedStock && <StockDetailModal stock={selectedStock} onClose={() => setSelectedStock(null)} />}
     </div>
