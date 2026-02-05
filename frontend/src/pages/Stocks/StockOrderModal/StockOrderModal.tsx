@@ -14,7 +14,7 @@ export default function TradeForm({
   onClose,
 }: TradeFormProps) {
   const [action, setAction] = useState<"buy" | "sell">("buy");
-  const [quantity, setQuantity] = useState(0);
+  const [quantity, setQuantity] = useState(1);
   const [isProcessing, setIsProcessing] = useState(false);
   const [cashBalance, setCashBalance] = useState<number | null>(null);
   const [currentHoldings, setCurrentHoldings] = useState<number>(0);
@@ -250,7 +250,7 @@ export default function TradeForm({
           type="number"
           className="order-input"
           value={quantity}
-          onChange={(e) => setQuantity(parseInt(e.target.value) || 0)}
+          onChange={(e) => setQuantity(parseInt(e.target.value))}
           min="1"
           disabled={loading}
         />
@@ -260,10 +260,12 @@ export default function TradeForm({
         <div className="summary-row">
           <span className="label">Total Value:</span>
           <span className="value">
-            {new Intl.NumberFormat("en-UK", {
-              style: "currency",
-              currency: "EUR",
-            }).format(totalValue)}
+            {isNaN(totalValue) || !totalValue
+              ? "$0.00"
+              : new Intl.NumberFormat("en-US", {
+                  style: "currency",
+                  currency: "USD",
+                }).format(totalValue)}
           </span>
         </div>
       </div>
@@ -274,11 +276,13 @@ export default function TradeForm({
         <button
           className={`btn execute ${action}`}
           onClick={handleExecute}
-          disabled={!isValidOrder() || isProcessing || loading}
+          disabled={!isValidOrder() || isProcessing || loading || isNaN(quantity)}
         >
           {isProcessing
             ? "Processing..."
-            : `${action === "buy" ? "Buy" : "Sell"} ${quantity} Shares`}
+            : isNaN(quantity) || !quantity
+            ? `${action === "buy" ? "Buy" : "Sell"} Shares`
+            : `${action === "buy" ? "Buy" : "Sell"} ${quantity} ${quantity === 1 ? "Share" : "Shares"}`}
         </button>
       </div>
     </div>

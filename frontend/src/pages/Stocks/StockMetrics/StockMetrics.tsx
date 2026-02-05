@@ -1,7 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import StockDetailModal from "../StockDetailModal/StockDetailModal";
-import ComparisonPanel from "../ComparisonPanel/ComparisonPanel";
-import StockOrderModal from "../StockOrderModal/StockOrderModal";
 import "./StockMetrics.css";
 
 // TypeScript Interfaces
@@ -601,27 +599,6 @@ function StockMetricsContent() {
     });
   };
 
-  const exportToCSV = () => {
-    const headers = allColumns
-      .filter((col) => visibleColumns.includes(col.key))
-      .map((col) => col.label);
-
-    const rows = filteredAndSortedStocks.map((stock) =>
-      allColumns
-        .filter((col) => visibleColumns.includes(col.key))
-        .map((col) => stock[col.key as keyof Stock])
-    );
-
-    const csvContent = [headers.join(","), ...rows.map((row) => row.join(","))].join("\n");
-
-    const blob = new Blob([csvContent], { type: "text/csv" });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `stock-metrics-${new Date().toISOString().split("T")[0]}.csv`;
-    a.click();
-  };
-
   if (loading) {
     return (
       <div className="metrics-container">
@@ -651,17 +628,8 @@ function StockMetricsContent() {
             </div>
           </div>
           <div className="header-actions">
-            <button
-              className={`btn-compare ${compareMode ? "active" : ""}`}
-              onClick={() => setCompareMode(!compareMode)}
-            >
-              {compareMode ? "Exit Compare Mode" : "Compare Stocks"}
-            </button>
             <button className="btn-secondary" onClick={() => setShowColumnCustomizer(!showColumnCustomizer)}>
-              Customize Columns
-            </button>
-            <button className="btn-secondary" onClick={exportToCSV}>
-              Export CSV
+              Customise Columns
             </button>
           </div>
         </div>
@@ -806,16 +774,6 @@ function StockMetricsContent() {
           ))
         )}
       </div>
-
-      {compareMode && selectedForCompare.length > 0 && (
-        <ComparisonPanel
-          stocks={stocks.filter((s) => selectedForCompare.includes(s.id))}
-          onClose={() => {
-            setCompareMode(false);
-            setSelectedForCompare([]);
-          }}
-        />
-      )}
 
       {selectedStock && <StockDetailModal stock={selectedStock} onClose={() => setSelectedStock(null)} />}
     </div>

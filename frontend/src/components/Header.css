@@ -1,0 +1,179 @@
+/* Header Score Container - Make items sit side by side */
+.header-score-container {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Watchlist Badge */
+.watchlist-container {
+  position: relative;
+}
+
+.watchlist-badge {
+  position: relative;
+  padding: 10px 14px;
+  background: rgba(0, 40, 85, 0.4);
+  border: 1px solid rgba(201, 169, 97, 0.3);
+  border-radius: 8px;
+  color: #ffffff;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.watchlist-badge:hover {
+  background: rgba(0, 40, 85, 0.6);
+  border-color: rgba(201, 169, 97, 0.5);
+  transform: translateY(-1px);
+}
+
+.watchlist-icon {
+  font-size: 20px;
+  line-height: 1;
+  color: #C9A961;
+}
+
+.watchlist-count {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  background: #C9A961;
+  color: #001428;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 10px;
+  min-width: 18px;
+  text-align: center;
+}
+
+/* Watchlist Dropdown */
+.watchlist-dropdown {
+  width: 340px;
+  max-height: 450px;
+  overflow-y: auto;
+}
+
+.dropdown-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid rgba(201, 169, 97, 0.2);
+}
+
+.dropdown-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: #C9A961;
+}
+
+.dropdown-empty {
+  padding: 32px 20px;
+  text-align: center;
+}
+
+.dropdown-empty p {
+  margin: 0 0 16px 0;
+  color: #B8C5D6;
+  font-size: 14px;
+}
+
+.btn-browse {
+  display: inline-block;
+  padding: 10px 20px;
+  background: rgba(201, 169, 97, 0.2);
+  border: 1px solid rgba(201, 169, 97, 0.4);
+  border-radius: 6px;
+  color: #C9A961;
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 600;
+  transition: all 0.2s;
+}
+
+.btn-browse:hover {
+  background: rgba(201, 169, 97, 0.3);
+  border-color: rgba(201, 169, 97, 0.6);
+}
+
+.watchlist-items {
+  padding: 12px;
+}
+
+.watchlist-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px;
+  background: rgba(0, 40, 85, 0.3);
+  border: 1px solid rgba(201, 169, 97, 0.15);
+  border-radius: 8px;
+  margin-bottom: 10px;
+  transition: all 0.2s;
+}
+
+.watchlist-item:hover {
+  background: rgba(0, 40, 85, 0.5);
+  border-color: rgba(201, 169, 97, 0.3);
+}
+
+.watchlist-item-left {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.watchlist-item .symbol {
+  font-size: 15px;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.watchlist-item .price {
+  font-size: 13px;
+  color: #B8C5D6;
+}
+
+.watchlist-item-right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.watchlist-item .change {
+  font-size: 13px;
+  font-weight: 600;
+  min-width: 60px;
+  text-align: right;
+}
+
+.watchlist-item .change.positive {
+  color: #00ff88;
+}
+
+.watchlist-item .change.negative {
+  color: #ff4757;
+}
+
+.btn-remove {
+  background: rgba(255, 71, 87, 0.2);
+  border: 1px solid rgba(255, 71, 87, 0.3);
+  border-radius: 4px;
+  color: #ff4757;
+  font-size: 20px;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  line-height: 1;
+}
+
+.btn-remove:hover {
+  background: rgba(255, 71, 87, 0.4);
+  border-color: rgba(255, 71, 87, 0.6);
+}

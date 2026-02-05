@@ -1,8 +1,42 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import {
+  LineChart,
+  Line,
+  PieChart,
+  Pie,
+  Cell,
+  XAxis,
+  YAxis,
+  Tooltip,
+  CartesianGrid,
+  ResponsiveContainer,
+} from "recharts";
 import "./Dashboard.css";
 import { supabase } from "../../supabaseClient";
 import { useAuth } from "../../context/AuthContext";
+import { useCompetitionScore } from "../../context/CompetitionScoreContext";
+import { useWatchlist } from "../../context/WatchlistContext";
+
+type PERatioPoint = {
+  symbol: string;
+  pe_ratio: number;
+};
+
+type EquityDataPoint = {
+  date: string;
+  equity: number;
+};
+
+type DailyPnLDataPoint = {
+  date: string;
+  pnl: number;
+};
+
+type AllocationDataPoint = {
+  symbol: string;
+  value: number;
+};
 
 type PortfolioSummary = {
   totalValue: number;
@@ -63,6 +97,10 @@ type CompetitionScore = {
 
 export default function Dashboard() {
   const { session, loading: authLoading } = useAuth();
+  const { removeFromWatchlist } = useWatchlist();
+  const [watchlist, setWatchlist] = useState<string[]>([]);
+  const { setCompetitionScore: setContextCompetitionScore } =
+    useCompetitionScore();
   const navigate = useNavigate();
   const priceIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const isFetchingPricesRef = useRef(false);
@@ -74,7 +112,6 @@ export default function Dashboard() {
   const [priceMap, setPriceMap] = useState<Map<string, number>>(new Map());
   const [initialCapital, setInitialCapital] = useState(100000);
   const [cashBalance, setCashBalance] = useState(0);
-  const [watchlist, setWatchlist] = useState<string[]>([]);
   const [summary, setSummary] = useState<PortfolioSummary>({
     totalValue: 0,
     totalPnL: 0,
@@ -105,6 +142,10 @@ export default function Dashboard() {
     beta: 0,
   });
   const [societyName, setSocietyName] = useState("Society");
+  const [equityCurveData, setEquityCurveData] = useState<EquityDataPoint[]>([]);
+  const [allocationData, setAllocationData] = useState<AllocationDataPoint[]>(
+    [],
+  );
 
   const handleLogout = async () => {
     try {
@@ -275,8 +316,68 @@ export default function Dashboard() {
       currency: "USD",
     }).format(value);
 
+  const formatAxisCurrency = (value: number) => {
+    if (value >= 1000000) {
+      return `$${(value / 1000000).toFixed(1)}M`;
+    } else if (value >= 1000) {
+      return `$${(value / 1000).toFixed(0)}K`;
+    }
+    return `$${value.toFixed(0)}`;
+  };
+
   const formatPercent = (value: number) =>
     `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
+
+  /** Equity curve from trades only: sort by placed_at ASC, start at initial_capital, BUY -> equity -= notional, SELL -> equity += notional */
+  const calculateEquityCurve = useCallback(
+    (trades: any[], initCapital: number): EquityDataPoint[] => {
+      const sorted = [...(trades ?? [])].sort(
+        (a, b) =>
+          new Date(a.placed_at ?? 0).getTime() -
+          new Date(b.placed_at ?? 0).getTime(),
+      );
+      let equity = initCapital;
+      const points: EquityDataPoint[] = [];
+      const startDate =
+        sorted.length > 0
+          ? new Date(sorted[0].placed_at).toISOString().slice(0, 10)
+          : new Date().toISOString().slice(0, 10);
+      points.push({ date: startDate, equity: initCapital });
+      sorted.forEach((t: any) => {
+        const side = (t.side ?? "buy").toLowerCase();
+        const notional = Number(
+          t.notional ?? Number(t.quantity ?? 0) * Number(t.price ?? 0),
+        );
+        if (side === "buy") equity -= notional;
+        else if (side === "sell") equity += notional;
+        const date = new Date(t.placed_at ?? 0).toISOString().slice(0, 10);
+        points.push({ date, equity });
+      });
+      return points;
+    },
+    [],
+  );
+
+  /** Daily realized P&L from trades: group by day, pnl = sum(SELL notional) - sum(BUY notional) per day */
+  const calculateDailyPnL = useCallback(
+    (trades: any[]): DailyPnLDataPoint[] => {
+      const byDay = new Map<string, number>();
+      (trades ?? []).forEach((t: any) => {
+        const date = new Date(t.placed_at ?? 0).toISOString().slice(0, 10);
+        const notional = Number(
+          t.notional ?? Number(t.quantity ?? 0) * Number(t.price ?? 0),
+        );
+        const side = (t.side ?? "buy").toLowerCase();
+        const current = byDay.get(date) ?? 0;
+        if (side === "sell") byDay.set(date, current + notional);
+        else if (side === "buy") byDay.set(date, current - notional);
+      });
+      return Array.from(byDay.entries())
+        .map(([date, pnl]) => ({ date, pnl }))
+        .sort((a, b) => a.date.localeCompare(b.date));
+    },
+    [],
+  );
 
   const calculatePnL = useCallback(
     (position: Position, currentPrice: number): number => {
@@ -298,13 +399,19 @@ export default function Dashboard() {
     [],
   );
 
-  const [competitionScore, setCompetitionScore] = useState<CompetitionScore>({
-    returnScore: 0,
-    riskScore: 0,
-    consistencyScore: 0,
-    activityScore: 0,
-    totalScore: 0,
-  });
+  const [competitionScore, setCompetitionScoreLocal] =
+    useState<CompetitionScore>({
+      returnScore: 0,
+      riskScore: 0,
+      consistencyScore: 0,
+      activityScore: 0,
+      totalScore: 0,
+    });
+
+  const setCompetitionScore = (score: CompetitionScore) => {
+    setCompetitionScoreLocal(score);
+    setContextCompetitionScore(score);
+  };
 
   const fetchPrices = useCallback(
     async (symbols: string[]): Promise<Map<string, number>> => {
@@ -384,22 +491,6 @@ export default function Dashboard() {
     },
     [],
   );
-
-  const fetchWatchlist = useCallback(async (userId: string) => {
-    try {
-      const { data, error } = await supabase
-        .from("watchlist")
-        .select("symbol")
-        .eq("profile_id", userId);
-
-      if (error) throw error;
-
-      const symbols = data?.map((item) => item.symbol) || [];
-      setWatchlist(symbols);
-    } catch (err) {
-      console.error("Error fetching watchlist:", err);
-    }
-  }, []);
 
   const calculatePnLForDisplay = useCallback(
     (position: Position) => {
@@ -650,371 +741,376 @@ export default function Dashboard() {
       return;
     }
 
-    const fetchDashboardData = async () => {
-      console.log("🚀 Initializing dashboard...");
-      setLoading(true);
-      setError(null);
+  const fetchDashboardData = async () => {
+    console.log("🚀 Initializing dashboard...");
+    setLoading(true);
+    setError(null);
+
+    try {
+      const userId = session?.user?.id;
+      if (!userId) {
+        setLoading(false);
+        return;
+      }
+
+      hasInitializedRef.current = true;
+
+      let initialCapital = 100000;
+      let fetchedSocietyName = "Society";
 
       try {
-        const userId = session?.user?.id;
-        if (!userId) {
-          setLoading(false);
-          return;
+        const { data: profileData } = await supabase
+          .from("profiles")
+          .select("society_name, initial_capital")
+          .eq("id", userId)
+          .single();
+
+        if (profileData?.initial_capital) {
+          initialCapital = Number(profileData.initial_capital);
         }
 
-        hasInitializedRef.current = true;
-
-        let initialCapital = 100000;
-        let fetchedSocietyName = "Society";
-
-        try {
-          const { data: profileData } = await supabase
-            .from("profiles")
-            .select("society_name, initial_capital")
-            .eq("id", userId)
-            .single();
-
-          if (profileData?.initial_capital) {
-            initialCapital = Number(profileData.initial_capital);
-          }
-
-          if (profileData?.society_name) {
-            fetchedSocietyName = profileData.society_name;
-            setSocietyName(fetchedSocietyName);
-          }
-        } catch (err) {
-          console.warn("Could not fetch profile data, using defaults");
+        if (profileData?.society_name) {
+          fetchedSocietyName = profileData.society_name;
+          setSocietyName(fetchedSocietyName);
         }
+      } catch (err) {
+        console.warn("Could not fetch profile data, using defaults");
+      }
 
-        // Fetch historical snapshots for risk calculations (last 90 days)
-        try {
-          const { data: snapshotsData } = await supabase
-            .from("portfolio_snapshots")
-            .select("*")
-            .eq("profile_id", userId)
-            .order("timestamp", { ascending: true })
-            .limit(2000); // ~90 days of hourly data
-
-          if (snapshotsData && snapshotsData.length > 0) {
-            portfolioSnapshotsRef.current = snapshotsData.map((s: any) => ({
-              timestamp: new Date(s.timestamp),
-              totalEquity: Number(s.total_equity),
-              dailyReturn: Number(s.daily_return ?? 0),
-            }));
-            console.log(
-              `📊 Loaded ${portfolioSnapshotsRef.current.length} historical snapshots`,
-            );
-          }
-        } catch (err) {
-          console.warn(
-            "Could not fetch portfolio snapshots, risk metrics will be limited",
-          );
-        }
-
-        const { data: tradesData, error: fetchError } = await supabase
-          .from("trades")
+      // Fetch historical snapshots for risk calculations (last 90 days)
+      try {
+        const { data: snapshotsData } = await supabase
+          .from("portfolio_snapshots")
           .select("*")
           .eq("profile_id", userId)
-          .order("placed_at", { ascending: true });
+          .order("timestamp", { ascending: true })
+          .limit(2000);
 
-        if (fetchError) throw fetchError;
+        if (snapshotsData && snapshotsData.length > 0) {
+          portfolioSnapshotsRef.current = snapshotsData.map((s: any) => ({
+            timestamp: new Date(s.timestamp),
+            totalEquity: Number(s.total_equity),
+            dailyReturn: Number(s.daily_return ?? 0),
+          }));
+          console.log(
+            `📊 Loaded ${portfolioSnapshotsRef.current.length} historical snapshots`,
+          );
+        }
+      } catch (err) {
+        console.warn(
+          "Could not fetch portfolio snapshots, risk metrics will be limited",
+        );
+      }
 
-        const trades = tradesData ?? [];
-        const symbolNameMap = new Map<string, string>();
+      const { data: tradesData, error: fetchError } = await supabase
+        .from("trades")
+        .select("*")
+        .eq("profile_id", userId)
+        .order("placed_at", { ascending: true });
 
-        let totalCostBasis = 0;
-        let totalProceeds = 0;
+      if (fetchError) throw fetchError;
 
-        trades.forEach((trade: any) => {
-          const side = (trade.side ?? "buy").toLowerCase();
-          const quantity = Number(trade.quantity ?? 0);
-          const price = Number(trade.price ?? 0);
-          const notional = Number(trade.notional ?? quantity * price);
+      const trades = tradesData ?? [];
+      const symbolNameMap = new Map<string, string>();
 
-          if (side === "buy") {
-            totalCostBasis += notional;
-          } else if (side === "sell") {
-            totalProceeds += notional;
-          }
-        });
+      let totalCostBasis = 0;
+      let totalProceeds = 0;
 
-        const calculatedCashBalance =
-          initialCapital - totalCostBasis + totalProceeds;
+      trades.forEach((trade: any) => {
+        const side = (trade.side ?? "buy").toLowerCase();
+        const quantity = Number(trade.quantity ?? 0);
+        const price = Number(trade.price ?? 0);
+        const notional = Number(trade.notional ?? quantity * price);
 
-        const positionsMap = new Map<string, any>();
+        if (side === "buy") {
+          totalCostBasis += notional;
+        } else if (side === "sell") {
+          totalProceeds += notional;
+        }
+      });
 
-        trades.forEach((trade: any) => {
-          const symbol = (trade.symbol ?? "").toUpperCase().trim();
-          const side = (trade.side ?? "buy").toLowerCase();
-          const quantity = Number(trade.quantity ?? 0);
-          const price = Number(trade.price ?? 0);
-          const notional = Number(trade.notional ?? quantity * price);
+      const calculatedCashBalance =
+        initialCapital - totalCostBasis + totalProceeds;
 
-          if (trade.name) {
-            symbolNameMap.set(symbol, trade.name);
-          }
+      setEquityCurveData(calculateEquityCurve(trades, initialCapital));
 
-          if (!positionsMap.has(symbol)) {
-            positionsMap.set(symbol, {
-              symbol,
-              quantity: 0,
-              costBasis: 0,
-              entryPrice: 0,
-              positionType: "LONG",
-            });
-          }
+      const positionsMap = new Map<string, any>();
 
-          const position = positionsMap.get(symbol)!;
+      trades.forEach((trade: any) => {
+        const symbol = (trade.symbol ?? "").toUpperCase().trim();
+        const side = (trade.side ?? "buy").toLowerCase();
+        const quantity = Number(trade.quantity ?? 0);
+        const price = Number(trade.price ?? 0);
+        const notional = Number(trade.notional ?? quantity * price);
 
-          if (side === "buy") {
-            position.quantity += quantity;
-            position.costBasis += notional;
-          } else if (side === "sell") {
-            const oldQuantity = position.quantity;
-            const oldCostBasis = position.costBasis;
-            position.quantity -= quantity;
+        if (trade.name) {
+          symbolNameMap.set(symbol, trade.name);
+        }
 
-            if (oldQuantity > 0 && position.quantity >= 0) {
-              if (oldQuantity > 0) {
-                const avgCost = oldCostBasis / oldQuantity;
-                position.costBasis = position.quantity * avgCost;
-              } else {
-                position.costBasis = 0;
-              }
-            } else if (oldQuantity > 0 && position.quantity < 0) {
-              position.costBasis = Math.abs(position.quantity) * price;
-            } else if (oldQuantity <= 0) {
-              position.costBasis += notional;
+        if (!positionsMap.has(symbol)) {
+          positionsMap.set(symbol, {
+            symbol,
+            quantity: 0,
+            costBasis: 0,
+            entryPrice: 0,
+            positionType: "LONG",
+          });
+        }
+
+        const position = positionsMap.get(symbol)!;
+
+        if (side === "buy") {
+          position.quantity += quantity;
+          position.costBasis += notional;
+        } else if (side === "sell") {
+          const oldQuantity = position.quantity;
+          const oldCostBasis = position.costBasis;
+          position.quantity -= quantity;
+
+          if (oldQuantity > 0 && position.quantity >= 0) {
+            if (oldQuantity > 0) {
+              const avgCost = oldCostBasis / oldQuantity;
+              position.costBasis = position.quantity * avgCost;
+            } else {
+              position.costBasis = 0;
             }
+          } else if (oldQuantity > 0 && position.quantity < 0) {
+            position.costBasis = Math.abs(position.quantity) * price;
+          } else if (oldQuantity <= 0) {
+            position.costBasis += notional;
           }
-        });
+        }
+      });
 
-        const aggregatedPositions = Array.from(positionsMap.values()).filter(
-          (pos) => Math.abs(pos.quantity) > 0.0001,
-        );
+      const aggregatedPositions = Array.from(positionsMap.values()).filter(
+        (pos) => Math.abs(pos.quantity) > 0.0001,
+      );
 
-        setInitialCapital(initialCapital);
-        setCashBalance(calculatedCashBalance);
+      setInitialCapital(initialCapital);
+      setCashBalance(calculatedCashBalance);
 
-        // Fetch watchlist and get symbols directly
-        const { data: watchlistData } = await supabase
-          .from("watchlist")
-          .select("symbol")
-          .eq("profile_id", userId);
+      // ✅ FETCH WATCHLIST DIRECTLY FROM SUPABASE (FAST!)
+      const { data: watchlistData } = await supabase
+        .from("watchlist")
+        .select("symbol")
+        .eq("profile_id", userId);
 
-        const watchlistSymbols =
-          watchlistData?.map((item) => item.symbol) || [];
-        setWatchlist(watchlistSymbols);
+      const watchlistSymbols = watchlistData?.map((item) => item.symbol) || [];
+      setWatchlist(watchlistSymbols);
 
-        // Combine position symbols + watchlist symbols
-        const positionSymbols = aggregatedPositions.map((p) => p.symbol);
-        const symbols = [...new Set([...positionSymbols, ...watchlistSymbols])];
-        console.log(
-          `Fetching prices for ${positionSymbols.length} positions + ${watchlistSymbols.length} watchlist stocks...`,
-        );
+      // Combine position symbols + watchlist symbols
+      const positionSymbols = aggregatedPositions.map((p) => p.symbol);
+      const symbols = [...new Set([...positionSymbols, ...watchlistSymbols])];
+      console.log(
+        `📊 Fetching prices for ${positionSymbols.length} positions + ${watchlistSymbols.length} watchlist stocks`,
+      );
 
-        console.log(
-          `📊 Fetching prices for ${positionSymbols.length} positions + ${watchlist.length} watchlist stocks`,
-        );
+      const detailedPositions: Position[] = aggregatedPositions.map((pos) => {
+        const entryPrice =
+          pos.quantity !== 0
+            ? Math.abs(pos.costBasis) / Math.abs(pos.quantity)
+            : 0;
+        const lastKnownPrice = lastKnownPricesRef.current.get(pos.symbol);
+        const currentPrice =
+          lastKnownPrice && lastKnownPrice > 0 ? lastKnownPrice : entryPrice;
+        const priceStale = !lastKnownPrice || lastKnownPrice === 0;
+        const marketValue = Math.abs(pos.quantity) * currentPrice;
 
-        const detailedPositions: Position[] = aggregatedPositions.map((pos) => {
-          const entryPrice =
-            pos.quantity !== 0
-              ? Math.abs(pos.costBasis) / Math.abs(pos.quantity)
-              : 0;
-          const lastKnownPrice = lastKnownPricesRef.current.get(pos.symbol);
-          const currentPrice =
-            lastKnownPrice && lastKnownPrice > 0 ? lastKnownPrice : entryPrice;
-          const priceStale = !lastKnownPrice || lastKnownPrice === 0;
-          const marketValue = Math.abs(pos.quantity) * currentPrice;
+        return {
+          symbol: pos.symbol,
+          name: symbolNameMap.get(pos.symbol) || pos.symbol,
+          quantity: pos.quantity,
+          costBasis: pos.costBasis,
+          currentPrice: currentPrice,
+          marketValue: marketValue,
+          entryPrice: entryPrice,
+          positionType: pos.quantity > 0 ? "LONG" : "SHORT",
+          priceStale: priceStale,
+          unrealized_pnl: 0,
+        };
+      });
 
-          return {
-            symbol: pos.symbol,
-            name: symbolNameMap.get(pos.symbol) || pos.symbol,
-            quantity: pos.quantity,
-            costBasis: pos.costBasis,
-            currentPrice: currentPrice,
-            marketValue: marketValue,
-            entryPrice: entryPrice,
-            positionType: pos.quantity > 0 ? "LONG" : "SHORT",
-            priceStale: priceStale,
-            unrealized_pnl: 0,
-          };
-        });
+      setPositions(detailedPositions);
 
-        setPositions(detailedPositions);
+      let totalMarketValue = 0;
+      detailedPositions.forEach((pos) => {
+        totalMarketValue += pos.marketValue;
+      });
 
-        let totalMarketValue = 0;
-        detailedPositions.forEach((pos) => {
-          totalMarketValue += pos.marketValue;
-        });
+      const totalEquityCalculated = calculatedCashBalance + totalMarketValue;
+      const totalPnLCalculated = totalEquityCalculated - initialCapital;
+      const totalReturn =
+        initialCapital === 0
+          ? 0
+          : (totalPnLCalculated / initialCapital) * 100;
 
-        const totalEquityCalculated = calculatedCashBalance + totalMarketValue;
-        const totalPnLCalculated = totalEquityCalculated - initialCapital;
-        const totalReturn =
-          initialCapital === 0
-            ? 0
-            : (totalPnLCalculated / initialCapital) * 100;
+      setSummary({
+        totalValue: totalEquityCalculated,
+        totalPnL: totalPnLCalculated,
+        totalPnLPercent: totalReturn,
+        cashBalance: calculatedCashBalance,
+        initialCapital,
+        positionCount: detailedPositions.length,
+      });
 
-        setSummary({
-          totalValue: totalEquityCalculated,
-          totalPnL: totalPnLCalculated,
-          totalPnLPercent: totalReturn,
-          cashBalance: calculatedCashBalance,
-          initialCapital,
-          positionCount: detailedPositions.length,
-        });
+      calculateRiskMetrics(
+        portfolioSnapshotsRef.current,
+        totalEquityCalculated,
+        initialCapital,
+      );
 
-        // Calculate risk metrics
-        calculateRiskMetrics(
-          portfolioSnapshotsRef.current,
-          totalEquityCalculated,
-          initialCapital,
-        );
+      const buyTrades = trades.filter(
+        (t: any) => (t.side ?? "buy").toLowerCase() === "buy",
+      ).length;
+      const sellTrades = trades.filter(
+        (t: any) => (t.side ?? "sell").toLowerCase() === "sell",
+      ).length;
+      const totalVolume = trades.reduce(
+        (sum: number, t: any) => sum + Math.abs(Number(t.quantity ?? 0)),
+        0,
+      );
+      const totalNotional = trades.reduce(
+        (sum: number, t: any) =>
+          sum +
+          Number(
+            t.notional ?? Number(t.quantity ?? 0) * Number(t.price ?? 0),
+          ),
+        0,
+      );
+      const averageTradeSize =
+        trades.length > 0 ? totalNotional / trades.length : 0;
 
-        const buyTrades = trades.filter(
-          (t: any) => (t.side ?? "buy").toLowerCase() === "buy",
-        ).length;
-        const sellTrades = trades.filter(
-          (t: any) => (t.side ?? "sell").toLowerCase() === "sell",
-        ).length;
-        const totalVolume = trades.reduce(
-          (sum: number, t: any) => sum + Math.abs(Number(t.quantity ?? 0)),
-          0,
-        );
-        const totalNotional = trades.reduce(
-          (sum: number, t: any) =>
-            sum +
-            Number(
-              t.notional ?? Number(t.quantity ?? 0) * Number(t.price ?? 0),
-            ),
-          0,
-        );
-        const averageTradeSize =
-          trades.length > 0 ? totalNotional / trades.length : 0;
+      const stockCounts = new Map<string, number>();
+      trades.forEach((t: any) => {
+        const symbol = t.symbol ?? "";
+        if (symbol) {
+          stockCounts.set(symbol, (stockCounts.get(symbol) ?? 0) + 1);
+        }
+      });
 
-        const stockCounts = new Map<string, number>();
-        trades.forEach((t: any) => {
-          const symbol = t.symbol ?? "";
-          if (symbol) {
-            stockCounts.set(symbol, (stockCounts.get(symbol) ?? 0) + 1);
-          }
-        });
+      let mostTradedStock = "-";
+      let mostTradedCount = 0;
+      stockCounts.forEach((count, symbol) => {
+        if (count > mostTradedCount) {
+          mostTradedCount = count;
+          mostTradedStock = symbol;
+        }
+      });
 
-        let mostTradedStock = "-";
-        let mostTradedCount = 0;
-        stockCounts.forEach((count, symbol) => {
-          if (count > mostTradedCount) {
-            mostTradedCount = count;
-            mostTradedStock = symbol;
-          }
-        });
+      const now = new Date();
+      const today = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate(),
+      );
+      const weekAgo = new Date(today);
+      weekAgo.setDate(weekAgo.getDate() - 7);
 
-        const now = new Date();
-        const today = new Date(
-          now.getFullYear(),
-          now.getMonth(),
-          now.getDate(),
-        );
-        const weekAgo = new Date(today);
-        weekAgo.setDate(weekAgo.getDate() - 7);
+      const tradesToday = trades.filter((t: any) => {
+        const tradeDate = new Date(t.placed_at ?? t.filled_at ?? "");
+        return tradeDate >= today;
+      }).length;
 
-        const tradesToday = trades.filter((t: any) => {
-          const tradeDate = new Date(t.placed_at ?? t.filled_at ?? "");
-          return tradeDate >= today;
-        }).length;
+      const tradesThisWeek = trades.filter((t: any) => {
+        const tradeDate = new Date(t.placed_at ?? t.filled_at ?? "");
+        return tradeDate >= weekAgo;
+      }).length;
 
-        const tradesThisWeek = trades.filter((t: any) => {
-          const tradeDate = new Date(t.placed_at ?? t.filled_at ?? "");
-          return tradeDate >= weekAgo;
-        }).length;
+      setTradingStats({
+        totalTrades: trades.length,
+        buyTrades,
+        sellTrades,
+        totalVolume,
+        averageTradeSize,
+        mostTradedStock,
+        mostTradedCount,
+        tradesToday,
+        tradesThisWeek,
+        totalNotional,
+      });
 
-        setTradingStats({
-          totalTrades: trades.length,
-          buyTrades,
-          sellTrades,
-          totalVolume,
-          averageTradeSize,
-          mostTradedStock,
-          mostTradedCount,
-          tradesToday,
-          tradesThisWeek,
-          totalNotional,
-        });
+      console.log("🔄 Fetching initial prices (non-blocking)...");
+      if (symbols.length > 0) {
+        const prices = await fetchPrices(symbols);
+        if (prices.size > 0) {
+          setPriceMap(prices);
+          
+          // Calculate allocation data
+          const allocation = aggregatedPositions
+            .map((pos) => ({
+              symbol: pos.symbol,
+              value: Math.abs(pos.quantity) * (prices.get(pos.symbol) ?? 0),
+            }))
+            .filter((a) => a.value > 0);
+          setAllocationData(allocation);
 
-        console.log("🔄 Fetching initial prices (non-blocking)...");
-        if (symbols.length > 0) {
+          const updatedPositions = detailedPositions.map((pos) => {
+            const freshPrice = prices.get(pos.symbol);
+            if (freshPrice && freshPrice > 0) {
+              return {
+                ...pos,
+                currentPrice: freshPrice,
+                marketValue: Math.abs(pos.quantity) * freshPrice,
+                priceStale: false,
+              };
+            }
+            return pos;
+          });
+
+          setPositions(updatedPositions);
+
+          let updatedTotalMarketValue = 0;
+          updatedPositions.forEach((pos) => {
+            updatedTotalMarketValue += pos.marketValue;
+          });
+
+          const updatedTotalEquity =
+            calculatedCashBalance + updatedTotalMarketValue;
+          const updatedTotalPnLCalc = updatedTotalEquity - initialCapital;
+          const updatedTotalReturn =
+            initialCapital === 0
+              ? 0
+              : (updatedTotalPnLCalc / initialCapital) * 100;
+
+          setSummary({
+            totalValue: updatedTotalEquity,
+            totalPnL: updatedTotalPnLCalc,
+            totalPnLPercent: updatedTotalReturn,
+            cashBalance: calculatedCashBalance,
+            initialCapital,
+            positionCount: updatedPositions.length,
+          });
+
+          calculateRiskMetrics(
+            portfolioSnapshotsRef.current,
+            updatedTotalEquity,
+            initialCapital,
+          );
+        }
+      }
+
+      if (priceIntervalRef.current) {
+        clearInterval(priceIntervalRef.current);
+      }
+
+      if (symbols.length > 0) {
+        priceIntervalRef.current = setInterval(async () => {
+          console.log("⏰ Polling prices...");
           const prices = await fetchPrices(symbols);
           if (prices.size > 0) {
             setPriceMap(prices);
-
-            const updatedPositions = detailedPositions.map((pos) => {
-              const freshPrice = prices.get(pos.symbol);
-              if (freshPrice && freshPrice > 0) {
-                return {
-                  ...pos,
-                  currentPrice: freshPrice,
-                  marketValue: Math.abs(pos.quantity) * freshPrice,
-                  priceStale: false,
-                };
-              }
-              return pos;
-            });
-
-            setPositions(updatedPositions);
-
-            let updatedTotalMarketValue = 0;
-            updatedPositions.forEach((pos) => {
-              updatedTotalMarketValue += pos.marketValue;
-            });
-
-            const updatedTotalEquity =
-              calculatedCashBalance + updatedTotalMarketValue;
-            const updatedTotalPnLCalc = updatedTotalEquity - initialCapital;
-            const updatedTotalReturn =
-              initialCapital === 0
-                ? 0
-                : (updatedTotalPnLCalc / initialCapital) * 100;
-
-            setSummary({
-              totalValue: updatedTotalEquity,
-              totalPnL: updatedTotalPnLCalc,
-              totalPnLPercent: updatedTotalReturn,
-              cashBalance: calculatedCashBalance,
-              initialCapital,
-              positionCount: updatedPositions.length,
-            });
-
-            calculateRiskMetrics(
-              portfolioSnapshotsRef.current,
-              updatedTotalEquity,
-              initialCapital,
-            );
           }
-        }
-
-        if (priceIntervalRef.current) {
-          clearInterval(priceIntervalRef.current);
-        }
-
-        if (symbols.length > 0) {
-          priceIntervalRef.current = setInterval(async () => {
-            console.log("⏰ Polling prices...");
-            const prices = await fetchPrices(symbols);
-            if (prices.size > 0) {
-              setPriceMap(prices);
-            }
-          }, 30_000);
-        }
-      } catch (err: any) {
-        console.error("Error fetching dashboard data:", err?.message ?? err);
-        setError(
-          err?.message ?? "An error occurred while fetching dashboard data",
-        );
-      } finally {
-        setLoading(false);
+        }, 30_000);
       }
-    };
+    } catch (err: any) {
+      console.error("Error fetching dashboard data:", err?.message ?? err);
+      setError(
+        err?.message ?? "An error occurred while fetching dashboard data",
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
 
     if (!authLoading && session?.user?.id) {
       fetchDashboardData();
@@ -1028,7 +1124,14 @@ export default function Dashboard() {
       }
       hasInitializedRef.current = false;
     };
-  }, [session?.user?.id, authLoading, fetchPrices, calculateRiskMetrics]);
+  }, [
+    session?.user?.id,
+    authLoading,
+    fetchPrices,
+    calculateRiskMetrics,
+    calculateEquityCurve,
+    calculateDailyPnL,
+  ]);
 
   useEffect(() => {
     if (positions.length === 0 || priceMap.size === 0) return;
@@ -1052,6 +1155,14 @@ export default function Dashboard() {
 
     if (hasChanges) {
       setPositions(updatedPositions);
+
+      const allocation = updatedPositions
+        .map((pos) => ({
+          symbol: pos.symbol,
+          value: pos.marketValue,
+        }))
+        .filter((a) => a.value > 0);
+      setAllocationData(allocation);
 
       let totalMarketValue = 0;
       updatedPositions.forEach((pos) => {
@@ -1105,9 +1216,9 @@ export default function Dashboard() {
   useEffect(() => {
     const userId = session?.user?.id;
     if (userId && !loading) {
-      fetchWatchlist(userId);
+      const watchlistSymbols = watchlist;
     }
-  }, [session?.user?.id, fetchWatchlist, loading]);
+  }, [session?.user?.id, watchlist, loading]);
 
   // Competition scoring useEffect
   useEffect(() => {
@@ -1178,6 +1289,7 @@ export default function Dashboard() {
         <div className="error">{error}</div>
       ) : (
         <>
+          {/* SECTION 1: Portfolio Summary (MOST CRITICAL) */}
           <div className="stats-grid">
             <div
               className={`stat-card highlight ${summary.totalPnLPercent >= 0 ? "positive" : "negative"}`}
@@ -1215,53 +1327,7 @@ export default function Dashboard() {
             </div>
           </div>
 
-          <div className="competition-score-section">
-            <h2>Competition Score</h2>
-            <div className="stats-grid">
-              <div className="stat-card highlight">
-                <div className="stat-label">Total Competition Score</div>
-                <div className="stat-value">
-                  {competitionScore.totalScore}/100
-                </div>
-                <div className="stat-description">
-                  Your overall competition ranking score
-                </div>
-              </div>
-              <div className="stat-card">
-                <div className="stat-label">Return Score (40%)</div>
-                <div className="stat-value">{competitionScore.returnScore}</div>
-                <div className="stat-description">
-                  Based on total return vs initial capital
-                </div>
-              </div>
-              <div className="stat-card">
-                <div className="stat-label">Risk Score (30%)</div>
-                <div className="stat-value">{competitionScore.riskScore}</div>
-                <div className="stat-description">
-                  Sharpe ratio and drawdown management
-                </div>
-              </div>
-              <div className="stat-card">
-                <div className="stat-label">Consistency Score (20%)</div>
-                <div className="stat-value">
-                  {competitionScore.consistencyScore}
-                </div>
-                <div className="stat-description">
-                  Steady growth and low volatility
-                </div>
-              </div>
-              <div className="stat-card">
-                <div className="stat-label">Activity Score (10%)</div>
-                <div className="stat-value">
-                  {competitionScore.activityScore}
-                </div>
-                <div className="stat-description">
-                  Trading frequency and diversification
-                </div>
-              </div>
-            </div>
-          </div>
-
+          {/* SECTION 2: Active Positions (CRITICAL FOR TRADERS) */}
           {positions.length > 0 ? (
             <div className="positions-section">
               <h2>Active Positions</h2>
@@ -1360,55 +1426,142 @@ export default function Dashboard() {
             </div>
           )}
 
-          <div className="watchlist-section">
-            <h2>Watchlist {watchlist.length > 0 && `(${watchlist.length})`}</h2>
-            {watchlist.length > 0 ? (
-              <div className="watchlist-grid">
-                {watchlist.map((symbol) => {
-                  const price = priceMap.get(symbol.toUpperCase()) || 0;
-                  const handleRemove = async () => {
-                    try {
-                      const {
-                        data: { user },
-                      } = await supabase.auth.getUser();
-                      if (user) {
-                        await supabase
-                          .from("watchlist")
-                          .delete()
-                          .eq("profile_id", user.id)
-                          .eq("symbol", symbol);
-                        setWatchlist(watchlist.filter((s) => s !== symbol));
-                      }
-                    } catch (err) {
-                      console.error("Error removing from watchlist:", err);
-                    }
-                  };
-                  return (
-                    <div key={symbol} className="watchlist-item">
-                      <div className="watchlist-item-header">
-                        <div className="watchlist-symbol">{symbol}</div>
-                        <button
-                          className="watchlist-remove-btn"
-                          onClick={handleRemove}
-                          title="Remove from watchlist"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                      <div className="watchlist-price">
-                        {formatCurrency(price)}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="watchlist-empty">
-                <p>Your watchlist is empty. Add stocks to track them here.</p>
-              </div>
-            )}
-          </div>
+          {/* SECTION 3: Performance Charts (IMPORTANT FOR ANALYSIS) */}
+          <section className="dashboard-charts">
+            <div className="chart-container chart-full-width">
+              <h2>Performance Curve</h2>
+              <ResponsiveContainer width="100%" height={350}>
+                <LineChart
+                  data={equityCurveData}
+                  margin={{ top: 12, right: 24, left: 60, bottom: 40 }}
+                >
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    stroke="rgba(255, 255, 255, 0.1)"
+                  />
+                  <XAxis
+                    dataKey="date"
+                    stroke="rgba(255, 255, 255, 0.5)"
+                    tick={{
+                      fill: "rgba(255, 255, 255, 0.7)",
+                      fontSize: 11,
+                    }}
+                    tickFormatter={(value) => {
+                      const [y, m, d] = value.split("-");
+                      return d && m && y ? `${d}/${m}/${y}` : value;
+                    }}
+                  />
+                  <YAxis
+                    stroke="rgba(255, 255, 255, 0.5)"
+                    tick={{
+                      fill: "rgba(255, 255, 255, 0.7)",
+                      fontSize: 12,
+                    }}
+                    width={50}
+                    tickFormatter={(v) => formatAxisCurrency(v)}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: "rgba(20, 25, 35, 0.95)",
+                      border: "1px solid rgba(255, 255, 255, 0.1)",
+                      borderRadius: "8px",
+                      color: "#fff",
+                    }}
+                    labelFormatter={(value) => {
+                      const [y, m, d] = String(value).split("-");
+                      return d && m && y ? `${d}/${m}/${y}` : value;
+                    }}
+                    formatter={(value: number) => [
+                      formatCurrency(Number(value)),
+                      "Equity",
+                    ]}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="equity"
+                    stroke="var(--brand, #2e8cff)"
+                    strokeWidth={2}
+                    dot={{ r: 3 }}
+                    activeDot={{ r: 5 }}
+                    name="Equity"
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
 
+            <div className="chart-row">
+              <div className="chart-container">
+                <h2>News Feed</h2>
+                <div className="chart-empty">Coming Soon!</div>
+              </div>
+              <div className="chart-container">
+                <h2>Position Allocation</h2>
+                {allocationData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={300}>
+                    <PieChart>
+                      <Pie
+                        data={allocationData}
+                        dataKey="value"
+                        nameKey="symbol"
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={60}
+                        outerRadius={100}
+                        paddingAngle={2}
+                        label={({
+                          name,
+                          percent,
+                        }: {
+                          name?: string;
+                          percent?: number;
+                        }) =>
+                          `${name ?? ""} ${((percent ?? 0) * 100).toFixed(0)}%`
+                        }
+                      >
+                        {allocationData.map((_, index) => (
+                          <Cell
+                            key={`cell-${index}`}
+                            fill={
+                              [
+                                "#2e8cff",
+                                "#22c55e",
+                                "#eab308",
+                                "#ef4444",
+                                "#8b5cf6",
+                                "#ec4899",
+                                "#06b6d4",
+                                "#f97316",
+                              ][index % 8]
+                            }
+                          />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: "rgba(20, 25, 35, 0.95)",
+                          border: "1px solid rgba(255, 255, 255, 0.1)",
+                          borderRadius: "8px",
+                          color: "#fff",
+                        }}
+                        labelStyle={{ color: "#fff" }}
+                        itemStyle={{ color: "#60a5fa" }}
+                        formatter={(value: number) => [
+                          formatCurrency(value),
+                          "Value",
+                        ]}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="chart-empty">
+                    No positions with market value to display
+                  </div>
+                )}
+              </div>
+            </div>
+          </section>
+
+          {/* SECTION 5: Risk & Performance Metrics (ANALYTICAL) */}
           <div className="risk-metrics-section">
             <h2>Risk & Performance Metrics</h2>
             <div className="stats-grid">
@@ -1465,6 +1618,89 @@ export default function Dashboard() {
             </div>
           </div>
 
+          {/* SECTION 6: Competition Score (COMPARATIVE/RANKING) */}
+          <div className="competition-score-section">
+            <h2>Competition Score</h2>
+            <div className="stats-grid">
+              <div className="stat-card highlight">
+                <div className="stat-label">Total Competition Score</div>
+                <div className="stat-value">
+                  {competitionScore.totalScore}/100
+                </div>
+                <div className="stat-description">
+                  Your overall competition ranking score
+                </div>
+              </div>
+              <div className="stat-card">
+                <div className="stat-label">Return Score (40%)</div>
+                <div className="stat-value">{competitionScore.returnScore}</div>
+                <div className="stat-description">
+                  Based on total return vs initial capital
+                </div>
+              </div>
+              <div className="stat-card">
+                <div className="stat-label">Risk Score (30%)</div>
+                <div className="stat-value">{competitionScore.riskScore}</div>
+                <div className="stat-description">
+                  Sharpe ratio and drawdown management
+                </div>
+              </div>
+              <div className="stat-card">
+                <div className="stat-label">Consistency Score (20%)</div>
+                <div className="stat-value">
+                  {competitionScore.consistencyScore}
+                </div>
+                <div className="stat-description">
+                  Steady growth and low volatility
+                </div>
+              </div>
+              <div className="stat-card">
+                <div className="stat-label">Activity Score (10%)</div>
+                <div className="stat-value">
+                  {competitionScore.activityScore}
+                </div>
+                <div className="stat-description">
+                  Trading frequency and diversification
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* SECTION 7: Watchlist (SUPPLEMENTARY) */}
+          <div className="watchlist-section">
+            <h2>Watchlist {watchlist.length > 0 && `(${watchlist.length})`}</h2>
+            {watchlist.length > 0 ? (
+              <div className="watchlist-grid">
+                {watchlist.map((symbol) => {
+                  const price = priceMap.get(symbol.toUpperCase()) || 0;
+                  const handleRemove = () => removeFromWatchlist(symbol);
+                  return (
+                    <div key={symbol} className="watchlist-item">
+                      <div className="watchlist-item-header">
+                        <div className="watchlist-symbol">{symbol}</div>
+                        <button
+                          className="watchlist-remove-btn"
+                          onClick={handleRemove}
+                          title="Remove from watchlist"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                      <div className="watchlist-price">
+                        {formatCurrency(price)}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="watchlist-empty">
+                <p>Your watchlist is empty. Add stocks to track them here.</p>
+              </div>
+            )}
+          </div>
+
+          {/* SECTION 4: Trading Statistics (OPERATIONAL DATA) */}
           <div className="trading-stats-section">
             <h2>Trading Statistics</h2>
             <table className="stats-table">
@@ -1514,6 +1750,7 @@ export default function Dashboard() {
             </table>
           </div>
 
+          {/* SECTION 8: Quick Actions (UTILITY) */}
           <div className="quick-actions">
             <h2>Quick Actions</h2>
             <div className="actions-grid">
