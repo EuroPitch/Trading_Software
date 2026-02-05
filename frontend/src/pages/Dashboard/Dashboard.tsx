@@ -167,6 +167,15 @@ export default function Dashboard() {
       currency: "USD",
     }).format(value);
 
+  const formatAxisCurrency = (value: number) => {
+    if (value >= 1000000) {
+      return `$${(value / 1000000).toFixed(1)}M`;
+    } else if (value >= 1000) {
+      return `$${(value / 1000).toFixed(0)}K`;
+    }
+    return `$${value.toFixed(0)}`;
+  };
+
   const formatPercent = (value: number) =>
     `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
 
@@ -1319,10 +1328,10 @@ export default function Dashboard() {
           <section className="dashboard-charts">
             <div className="chart-container chart-full-width">
               <h2>Performance Curve</h2>
-              <ResponsiveContainer width="100%" height={300}>
+              <ResponsiveContainer width="100%" height={350}>
                 <LineChart
                   data={equityCurveData}
-                  margin={{ top: 8, right: 16, left: 8, bottom: 24 }}
+                  margin={{ top: 12, right: 24, left: 60, bottom: 40 }}
                 >
                   <CartesianGrid
                     strokeDasharray="3 3"
@@ -1346,7 +1355,8 @@ export default function Dashboard() {
                       fill: "rgba(255, 255, 255, 0.7)",
                       fontSize: 12,
                     }}
-                    tickFormatter={(v) => formatCurrency(v)}
+                    width={50}
+                    tickFormatter={(v) => formatAxisCurrency(v)}
                   />
                   <Tooltip
                     contentStyle={{

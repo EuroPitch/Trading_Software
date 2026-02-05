@@ -164,9 +164,10 @@
   background: linear-gradient(135deg, rgba(0, 24, 69, 0.8) 0%, rgba(0, 40, 85, 0.7) 100%);
   border: 1px solid rgba(201, 169, 97, 0.25);
   border-radius: 10px;
-  padding: 20px;
+  padding: 24px;
   margin-bottom: 20px;
-  min-height: 320px;
+  min-height: 420px;
+  overflow: hidden;
 }
 
 .dashboard-charts .chart-container h2 {
