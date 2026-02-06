@@ -1453,9 +1453,14 @@ export default function Dashboard() {
                       fontSize: 11,
                     }}
                     tickFormatter={(value) => {
-                      const [y, m, d] = value.split("-");
-                      return d && m && y ? `${d}/${m}/${y}` : value;
+                      const date = new Date(value);
+                      return date.toLocaleDateString('en-GB', { 
+                        day: '2-digit', 
+                        month: 'short' 
+                      });
                     }}
+                    interval={Math.floor(equityCurveData.length / 6)}
+                    minTickGap={80}
                   />
                   <YAxis
                     stroke="rgba(255, 255, 255, 0.5)"
@@ -1474,8 +1479,12 @@ export default function Dashboard() {
                       color: "#fff",
                     }}
                     labelFormatter={(value) => {
-                      const [y, m, d] = String(value).split("-");
-                      return d && m && y ? `${d}/${m}/${y}` : value;
+                      const date = new Date(String(value));
+                      return date.toLocaleDateString('en-GB', {
+                        day: '2-digit',
+                        month: 'short',
+                        year: 'numeric'
+                      });
                     }}
                     formatter={(value: number) => [
                       formatCurrency(Number(value)),
@@ -1487,7 +1496,7 @@ export default function Dashboard() {
                     dataKey="equity"
                     stroke="var(--brand, #2e8cff)"
                     strokeWidth={2}
-                    dot={{ r: 3 }}
+                    dot={false}
                     activeDot={{ r: 5 }}
                     name="Equity"
                   />
