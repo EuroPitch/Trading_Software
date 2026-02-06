@@ -97,7 +97,7 @@ type CompetitionScore = {
 
 export default function Dashboard() {
   const { session, loading: authLoading } = useAuth();
-  const { removeFromWatchlist } = useWatchlist();
+  const { watchlist: contextWatchlist, removeFromWatchlist } = useWatchlist();
   const [watchlist, setWatchlist] = useState<string[]>([]);
   const { setCompetitionScore: setContextCompetitionScore } =
     useCompetitionScore();
@@ -277,7 +277,7 @@ export default function Dashboard() {
           entryPrice: entryPrice,
           positionType: pos.quantity > 0 ? "LONG" : "SHORT",
           priceStale: false,
-          unrealizedpnl: 0,
+          unrealized_pnl: 0,
         };
       });
 
@@ -412,6 +412,12 @@ export default function Dashboard() {
     setCompetitionScoreLocal(score);
     setContextCompetitionScore(score);
   };
+  useEffect(() => {
+    if (contextWatchlist.length >= 0) {
+      setWatchlist(contextWatchlist);
+    }
+  }, [contextWatchlist]);
+
 
   const fetchPrices = useCallback(
     async (symbols: string[]): Promise<Map<string, number>> => {

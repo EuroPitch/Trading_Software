@@ -612,7 +612,7 @@ function StockMetricsContent() {
       <div className="metrics-header">
         <div className="header-top">
           <div>
-            <h1>Market Metrics Analysis</h1>
+            <h1>EuroPitch Stock & ETF Price Dashboard</h1>
             <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "8px", fontSize: "14px" }}>
               <span
                 style={{

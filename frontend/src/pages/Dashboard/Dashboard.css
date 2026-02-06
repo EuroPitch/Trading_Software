@@ -692,6 +692,7 @@
   padding: 20px;
 }
 
+
 .watchlist-item {
   background: rgba(0, 40, 85, 0.3);
   border: 1px solid rgba(201, 169, 97, 0.2);
@@ -702,24 +703,30 @@
   flex-direction: column;
 }
 
+
 .watchlist-item:hover {
   background: rgba(0, 40, 85, 0.5);
   border-color: rgba(201, 169, 97, 0.4);
   transform: translateY(-2px);
 }
 
+
 .watchlist-item-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 12px;
+  width: 100%; /* Full width */
 }
+
 
 .watchlist-symbol {
   font-size: 18px;
   font-weight: 700;
   color: #C9A961;
+  flex-shrink: 0; /* Prevents squishing */
 }
+
 
 .watchlist-remove-btn {
   background: rgba(164, 36, 59, 0.2);
@@ -736,7 +743,10 @@
   font-weight: 600;
   transition: all 0.2s;
   padding: 0;
+  flex-shrink: 0; /* Prevents squishing */
+  margin-left: auto; /* Pushes to far right */
 }
+
 
 .watchlist-remove-btn:hover {
   background: rgba(164, 36, 59, 0.4);
@@ -744,10 +754,12 @@
   transform: scale(1.1);
 }
 
+
 .watchlist-price {
   font-size: 16px;
   font-weight: 600;
   color: #ffffff;
+  align-self: flex-start; /* Aligns to the left */
 }
 
 .watchlist-section {
