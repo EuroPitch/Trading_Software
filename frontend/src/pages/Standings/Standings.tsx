@@ -131,15 +131,15 @@ export default function Standings() {
             <h3>Score Breakdown</h3>
             <div className="legend-items">
               <div className="legend-item">
-                <span className="legend-weight">40%</span>
+                <span className="legend-weight">50%</span>
                 <span className="legend-label">Return Score</span>
               </div>
               <div className="legend-item">
-                <span className="legend-weight">30%</span>
+                <span className="legend-weight">25%</span>
                 <span className="legend-label">Risk Score</span>
               </div>
               <div className="legend-item">
-                <span className="legend-weight">20%</span>
+                <span className="legend-weight">15%</span>
                 <span className="legend-label">Consistency Score</span>
               </div>
               <div className="legend-item">

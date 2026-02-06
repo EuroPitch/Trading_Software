@@ -630,25 +630,49 @@ export default function Dashboard() {
       positionCount: number,
       snapshots: PortfolioSnapshot[],
     ): CompetitionScore => {
-      const returnScore = Math.max(0, Math.min(100, totalReturn + 50));
+      // RETURN SCORE: Asymmetric penalty for losses (losses hurt 3x more)
+      // Range: -16.67% return = 0, 0% = 50, +16.67% = 100
+      const returnScore = totalReturn >= 0
+        ? Math.min(100, 50 + totalReturn * 3)
+        : Math.max(0, 50 + totalReturn * 9); // 9 = 3x penalty multiplier
+
+      // RISK SCORE: Sharpe ratio component + drawdown penalty
+      // Sharpe scaled: 3.0+ = max 50 points
       const sharpeScore = Math.min((Math.max(sharpe, 0) / 3.0) * 50, 50);
-      const drawdownPenalty = Math.min(maxDrawdown, 50) * 0.5;
+      
+      // Drawdown penalty: each % of drawdown removes 0.8 points (was 0.5)
+      const drawdownPenalty = Math.min(maxDrawdown, 50) * 0.8;
+      
       const riskScore = Math.max(0, sharpeScore + (50 - drawdownPenalty));
+
+      // CONSISTENCY SCORE: Positive return ratio + volatility penalty
       const positiveReturns = snapshots.filter((s) => s.dailyReturn > 0).length;
       const positiveRatio =
         snapshots.length > 0 ? positiveReturns / snapshots.length : 0;
-      const volatilityPenalty = Math.min(volatility, 100) / 100;
+      
+      // Volatility penalty is now more aggressive
+      const volatilityPenalty = Math.min(volatility / 100, 1.0);
+      
       const consistencyScore = Math.max(
         0,
-        Math.min(100, positiveRatio * 70 + (1 - volatilityPenalty) * 30),
+        Math.min(100, positiveRatio * 60 + (1 - volatilityPenalty) * 40),
       );
-      const tradeScore = Math.min(totalTrades / 30, 1.0) * 50;
-      const diversificationScore = Math.min(positionCount / 8, 1.0) * 30;
-      const activityScore = tradeScore + diversificationScore + 20;
+
+      // ACTIVITY SCORE: No free baseline, must earn all points
+      // Trade component: 30+ trades = max 60 points (was 50)
+      const tradeScore = Math.min(totalTrades / 30, 1.0) * 60;
+      
+      // Diversification: 8+ positions = max 40 points (was 30)
+      const diversificationScore = Math.min(positionCount / 8, 1.0) * 40;
+      
+      // REMOVED the +20 baseline
+      const activityScore = tradeScore + diversificationScore;
+
+      // TOTAL SCORE: Returns now weighted at 50% (was 40%)
       const totalScore =
-        returnScore * 0.4 +
-        riskScore * 0.3 +
-        consistencyScore * 0.2 +
+        returnScore * 0.5 +
+        riskScore * 0.25 +
+        consistencyScore * 0.15 +
         activityScore * 0.1;
 
       return {
@@ -1647,21 +1671,21 @@ export default function Dashboard() {
                 </div>
               </div>
               <div className="stat-card">
-                <div className="stat-label">Return Score (40%)</div>
+                <div className="stat-label">Return Score (50%)</div>
                 <div className="stat-value">{competitionScore.returnScore}</div>
                 <div className="stat-description">
                   Based on total return vs initial capital
                 </div>
               </div>
               <div className="stat-card">
-                <div className="stat-label">Risk Score (30%)</div>
+                <div className="stat-label">Risk Score (15%)</div>
                 <div className="stat-value">{competitionScore.riskScore}</div>
                 <div className="stat-description">
                   Sharpe ratio and drawdown management
                 </div>
               </div>
               <div className="stat-card">
-                <div className="stat-label">Consistency Score (20%)</div>
+                <div className="stat-label">Consistency Score (25%)</div>
                 <div className="stat-value">
                   {competitionScore.consistencyScore}
                 </div>
