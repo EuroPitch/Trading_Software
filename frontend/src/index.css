@@ -57,23 +57,22 @@ body {
 }
 
 .nav-container {
-  max-width: 1100px;
-  margin: 0 auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.8rem 1.5rem;
+  width: 100%;  /* Full width, not max-width! */
+  padding: 0.8rem 0;  /* Remove horizontal padding */
+  position: relative;  /* For absolute positioned nav-links */
 }
 
 .brand {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  text-decoration: none;
-  color: #fff;
-  font-weight: 600;
-  font-size: 1.25rem;
-  letter-spacing: 0.5px;
+  padding-left: 32px;  /* Push logo from edge */
+  flex: 0 0 auto;
+}
+
+.header-score-container {
+  padding-right: 32px;  /* Push score from edge */
+  flex: 0 0 auto;
 }
 
 .logo {

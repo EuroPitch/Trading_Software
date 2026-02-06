@@ -24,6 +24,17 @@ const Header = () => {
     { path: "/stocks", label: "Stocks" },
   ];
 
+  // Get score color based on value
+  const getScoreColor = (score: number) => {
+    if (score >= 80) return "#00ff88"; // Green
+    if (score >= 60) return "#C9A961"; // Gold
+    if (score >= 40) return "#FFA500"; // Orange
+    return "#ff4757"; // Red
+  };
+
+  const totalScore = competitionScore.totalScore;
+  const scoreColor = getScoreColor(totalScore);
+
   // Fetch prices for watchlist (same as Dashboard)
   useEffect(() => {
     if (watchlist.length === 0) return;
@@ -149,11 +160,6 @@ const Header = () => {
                             <div key={symbol} className="watchlist-item">
                               <div className="watchlist-item-left">
                                 <span className="symbol">{symbol}</span>
-                                <span className="price">
-                                  {formatCurrency(price)}
-                                </span>
-                              </div>
-                              <div className="watchlist-item-right">
                                 <button
                                   className="btn-remove"
                                   onClick={(e) => {
@@ -165,6 +171,9 @@ const Header = () => {
                                   ×
                                 </button>
                               </div>
+                              <span className="price">
+                                {formatCurrency(price)}
+                              </span>
                             </div>
                           );
                         })}
@@ -179,9 +188,12 @@ const Header = () => {
               className="competition-score-badge"
               onClick={() => setShowScoreDropdown(!showScoreDropdown)}
               title="Click to view detailed scores"
+              style={{ borderColor: scoreColor }}
             >
-              <div className="score-number">{competitionScore.totalScore}</div>
-              <div className="score-label">Score</div>
+              <div className="score-number" style={{ color: scoreColor }}>
+                {totalScore}
+              </div>
+              <div className="score-label">Competition Score</div>
             </button>
 
             {showScoreDropdown && (
@@ -195,8 +207,11 @@ const Header = () => {
                 >
                   <div className="dropdown-item">
                     <span className="dropdown-label">Total Score</span>
-                    <span className="dropdown-value total">
-                      {competitionScore.totalScore}/100
+                    <span 
+                      className="dropdown-value total"
+                      style={{ color: scoreColor }}
+                    >
+                      {totalScore}/100
                     </span>
                   </div>
                   <div className="dropdown-divider"></div>
