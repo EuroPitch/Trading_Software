@@ -1678,14 +1678,14 @@ export default function Dashboard() {
                 </div>
               </div>
               <div className="stat-card">
-                <div className="stat-label">Risk Score (15%)</div>
+                <div className="stat-label">Risk Score (25%)</div>
                 <div className="stat-value">{competitionScore.riskScore}</div>
                 <div className="stat-description">
                   Sharpe ratio and drawdown management
                 </div>
               </div>
               <div className="stat-card">
-                <div className="stat-label">Consistency Score (25%)</div>
+                <div className="stat-label">Consistency Score (15%)</div>
                 <div className="stat-value">
                   {competitionScore.consistencyScore}
                 </div>
