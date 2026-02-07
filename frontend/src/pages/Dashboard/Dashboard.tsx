@@ -108,6 +108,8 @@ export default function Dashboard() {
   const lastKnownPricesRef = useRef<Map<string, number>>(new Map());
   const portfolioSnapshotsRef = useRef<PortfolioSnapshot[]>([]);
 
+  const hasUpdatedScoresRef = useRef(false);
+
   const [positions, setPositions] = useState<Position[]>([]);
   const [priceMap, setPriceMap] = useState<Map<string, number>>(new Map());
   const [initialCapital, setInitialCapital] = useState(100000);
@@ -1153,6 +1155,7 @@ export default function Dashboard() {
         priceIntervalRef.current = null;
       }
       hasInitializedRef.current = false;
+      hasUpdatedScoresRef.current = false;
     };
   }, [
     session?.user?.id,
@@ -1250,11 +1253,16 @@ export default function Dashboard() {
     }
   }, [session?.user?.id, watchlist, loading]);
 
-  // Competition scoring useEffect
+  // Competition scoring useEffect - ONLY update if scores actually changed OR stale
   useEffect(() => {
     const userId = session?.user?.id;
-
-    if (!userId || summary.totalValue === 0 || loading) return;
+    if (!userId || loading) return;
+    
+    // Skip if we've already updated this session and values haven't changed
+    if (hasUpdatedScoresRef.current) {
+      console.log("⏭️ Scores already synced this session, skipping");
+      return;
+    }
 
     const timeoutId = setTimeout(async () => {
       // Sync portfolio first
@@ -1266,22 +1274,58 @@ export default function Dashboard() {
         cashBalance,
       );
 
-      // Then update competition scores
-      try {
-        await supabase
-          .from("profiles")
-          .update({
-            competition_score: competitionScore.totalScore,
-            return_score: competitionScore.returnScore,
-            risk_score: competitionScore.riskScore,
-            consistency_score: competitionScore.consistencyScore,
-            activity_score: competitionScore.activityScore,
-            score_last_updated: new Date().toISOString(),
-          })
-          .eq("id", userId);
-        console.log("✅ Competition scores updated");
-      } catch (err) {
-        console.error("❌ Failed to update scores:", err);
+      // Fetch CURRENT scores from database
+      const { data: currentScores } = await supabase
+        .from("profiles")
+        .select("competition_score, return_score, risk_score, consistency_score, activity_score, score_last_updated")
+        .eq("id", userId)
+        .single();
+
+      // Calculate current scores
+      const currentDbScore = currentScores?.competition_score || 0;
+      const calculatedScore = competitionScore.totalScore;
+      
+      // Check if scores are stale (older than 12 hours)
+      const lastUpdated = currentScores?.score_last_updated 
+        ? new Date(currentScores.score_last_updated).getTime() 
+        : 0;
+      const twelveHoursAgo = Date.now() - (12 * 60 * 60 * 1000);
+      const scoresAreStale = lastUpdated < twelveHoursAgo;
+      
+      // Only update if scores have changed OR if this is first score OR if stale
+      const scoreDiff = Math.abs(currentDbScore - calculatedScore);
+      const isFirstScore = currentDbScore === 0 && !currentScores?.return_score;
+      
+      if (scoreDiff > 1 || isFirstScore || scoresAreStale) {
+        const reason = isFirstScore 
+          ? 'First score write' 
+          : scoresAreStale 
+            ? `Scores stale (>${((Date.now() - lastUpdated) / (60 * 60 * 1000)).toFixed(1)}hrs old), refreshing`
+            : `Score changed by ${scoreDiff.toFixed(1)} points`;
+        
+        console.log(`🔄 ${reason}, updating database`);
+        
+        try {
+          await supabase
+            .from("profiles")
+            .update({
+              competition_score: competitionScore.totalScore,
+              return_score: competitionScore.returnScore,
+              risk_score: competitionScore.riskScore,
+              consistency_score: competitionScore.consistencyScore,
+              activity_score: competitionScore.activityScore,
+              score_last_updated: new Date().toISOString(),
+            })
+            .eq("id", userId);
+
+          console.log("✅ Competition scores updated");
+          hasUpdatedScoresRef.current = true;
+        } catch (err) {
+          console.error("❌ Failed to update scores:", err);
+        }
+      } else {
+        console.log(`⏭️ Score difference (${scoreDiff.toFixed(1)}) too small and not stale, skipping update`);
+        hasUpdatedScoresRef.current = true;
       }
     }, 3000);
 
@@ -1300,6 +1344,11 @@ export default function Dashboard() {
     competitionScore.consistencyScore,
     competitionScore.activityScore,
   ]);
+
+  // Reset the flag when trade count changes (actual new activity)
+  useEffect(() => {
+    hasUpdatedScoresRef.current = false;
+  }, [tradingStats.totalTrades]);
 
   return (
     <div className="dashboard-container">
