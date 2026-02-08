@@ -678,70 +678,117 @@ export default function Dashboard() {
   );
 
   const calculateCompetitionScore = useCallback(
-    (
-      totalReturn: number,
-      sharpe: number,
-      maxDrawdown: number,
-      volatility: number,
-      totalTrades: number,
-      allTimeUniqueSymbols: number, // NEW: Cumulative unique symbols
-      snapshots: PortfolioSnapshot[],
-    ): CompetitionScore => {
-      // RETURN SCORE: Asymmetric penalty for losses (losses hurt 3x more)
-      // Range: -16.67% return = 0, 0% = 50, +16.67% = 100
-      const returnScore =
-        totalReturn >= 0
-          ? Math.min(100, 50 + totalReturn * 3)
-          : Math.max(0, 50 + totalReturn * 9); // 9 = 3x penalty multiplier
+  (
+    totalReturn: number,
+    sharpe: number,
+    maxDrawdown: number,
+    volatility: number,
+    trades: any[], // ← CHANGED: Pass full trades array instead of totalTrades count
+    allTimeUniqueSymbols: number,
+    snapshots: PortfolioSnapshot[],
+  ): CompetitionScore => {
+    // RETURN SCORE: Asymmetric penalty for losses (losses hurt 3x more)
+    // Range: -16.67% return = 0, 0% = 50, +16.67% = 100
+    const returnScore =
+      totalReturn >= 0
+        ? Math.min(100, 50 + totalReturn * 3)
+        : Math.max(0, 50 + totalReturn * 9); // 9 = 3x penalty multiplier
 
-      // RISK SCORE: Sharpe ratio (70%) + drawdown management (30%)
-      // Sharpe component: 0-70 points (3.0+ Sharpe = max 70)
-      const sharpeScore = Math.min((Math.max(sharpe, 0) / 3.0) * 70, 70);
+    // RISK SCORE: Sharpe ratio (70%) + drawdown management (30%)
+    // Sharpe component: 0-70 points (3.0+ Sharpe = max 70)
+    const sharpeScore = Math.min((Math.max(sharpe, 0) / 3.0) * 70, 70);
 
-      // Drawdown component: 0-30 points (0% DD = 30, 50%+ DD = 0)
-      const drawdownScore = Math.max(0, 30 - maxDrawdown * 0.6);
+    // Drawdown component: 0-30 points (0% DD = 30, 50%+ DD = 0)
+    const drawdownScore = Math.max(0, 30 - maxDrawdown * 0.6);
 
-      const riskScore = Math.max(0, Math.min(100, sharpeScore + drawdownScore));
+    const riskScore = Math.max(0, Math.min(100, sharpeScore + drawdownScore));
 
-      // CONSISTENCY SCORE: Positive return ratio + volatility penalty
-      const positiveReturns = snapshots.filter((s) => s.dailyReturn > 0).length;
-      const positiveRatio =
-        snapshots.length > 0 ? positiveReturns / snapshots.length : 0;
+    // CONSISTENCY SCORE: Positive return ratio + volatility penalty (with recency weighting)
+    const now = Date.now();
+    const oneDayMs = 24 * 60 * 60 * 1000;
+    const consistencyHalfLifeDays = 14; // 2-week half-life for consistency
+    const consistencyHalfLifeMs = consistencyHalfLifeDays * oneDayMs;
 
-      // Volatility penalty: 30% annualized vol = full penalty (more realistic than 100%)
-      const volatilityPenalty = Math.min(volatility / 30, 1.0);
+    let weightedPositiveDays = 0;
+    let totalWeight = 0;
 
-      const consistencyScore = Math.max(
-        0,
-        Math.min(100, positiveRatio * 60 + (1 - volatilityPenalty) * 40),
-      );
+    snapshots.forEach((snapshot) => {
+      const snapshotTime = snapshot.timestamp.getTime();
+      const ageMs = now - snapshotTime;
+      
+      // Exponential decay: recent days weighted more heavily
+      const decayFactor = Math.exp(-ageMs / consistencyHalfLifeMs);
+      
+      totalWeight += decayFactor;
+      
+      if (snapshot.dailyReturn > 0) {
+        weightedPositiveDays += decayFactor;
+      }
+    });
 
-      // ACTIVITY SCORE: Cumulative metrics (not current positions)
-      // Trade component: 50+ trades = max 50 points (raised from 30)
-      const tradeScore = Math.min(totalTrades / 50, 1.0) * 50;
+    // Weighted positive ratio - recent performance matters more
+    const weightedPositiveRatio = totalWeight > 0 ? weightedPositiveDays / totalWeight : 0;
 
-      // Diversification: 15+ unique symbols EVER traded = max 50 points
-      const diversificationScore =
-        Math.min(allTimeUniqueSymbols / 15, 1.0) * 50;
+    // Volatility penalty: 30% annualized vol = full penalty (more realistic than 100%)
+    const volatilityPenalty = Math.min(volatility / 30, 1.0);
 
-      const activityScore = tradeScore + diversificationScore;
+    const consistencyScore = Math.max(
+      0,
+      Math.min(100, weightedPositiveRatio * 60 + (1 - volatilityPenalty) * 40),
+    );
 
-      // TOTAL SCORE: Returns weighted at 50%
-      const totalScore =
-        returnScore * 0.5 +
-        riskScore * 0.25 +
-        consistencyScore * 0.15 +
-        activityScore * 0.1;
+    // ACTIVITY SCORE: Time-decayed trades + diversification
+    // consts now & oneDayMs are both in the same place so no point duplicating
+    const halfLifeDays = 7; // Activity "half-life" of 7 days
+    const halfLifeMs = halfLifeDays * oneDayMs;
 
-      return {
-        returnScore: Math.round(returnScore),
-        riskScore: Math.round(riskScore),
-        consistencyScore: Math.round(consistencyScore),
-        activityScore: Math.round(activityScore),
-        totalScore: Math.round(totalScore),
-      };
-    },
-    [],
+    let weightedTradeCount = 0;
+    let recentTradeCount = 0;
+
+    // Calculate weighted trade count with exponential decay
+    trades.forEach((trade: any) => {
+      const tradeTime = new Date(trade.placed_at ?? trade.filled_at ?? now).getTime();
+      const ageMs = now - tradeTime;
+      
+      // Exponential decay: weight = e^(-age / halfLife)
+      // After 7 days, a trade counts for ~50% of its original value
+      // After 14 days, ~25%, after 21 days, ~12.5%, etc.
+      const decayFactor = Math.exp(-ageMs / halfLifeMs);
+      weightedTradeCount += decayFactor;
+      
+      // Count recent trades (last 7 days)
+      if (ageMs < (7 * oneDayMs)) {
+        recentTradeCount++;
+      }
+    });
+
+    // Recent activity component: 10+ trades in last 7 days = max 30 points
+    const recentTradeScore = Math.min(recentTradeCount / 10, 1.0) * 30;
+
+    // Cumulative weighted component: 50 weighted trades = max 20 points
+    const cumulativeTradeScore = Math.min(weightedTradeCount / 50, 1.0) * 20;
+
+    // Diversification: 15+ unique symbols EVER traded = max 50 points
+    const diversificationScore = Math.min(allTimeUniqueSymbols / 15, 1.0) * 50;
+
+    const activityScore = recentTradeScore + cumulativeTradeScore + diversificationScore;
+
+    // TOTAL SCORE: Returns weighted at 50%
+    const totalScore =
+      returnScore * 0.5 +
+      riskScore * 0.25 +
+      consistencyScore * 0.15 +
+      activityScore * 0.1;
+
+    return {
+      returnScore: Math.round(returnScore),
+      riskScore: Math.round(riskScore),
+      consistencyScore: Math.round(consistencyScore),
+      activityScore: Math.round(activityScore),
+      totalScore: Math.round(totalScore),
+    };
+  },
+  [],
   );
 
   // Sync portfolio to database and save HOURLY snapshot
@@ -1324,24 +1371,46 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (summary.totalValue === 0 || loading) return;
-    const score = calculateCompetitionScore(
-      summary.totalPnLPercent,
-      riskMetrics.sharpeRatio,
-      riskMetrics.maxDrawdown,
-      riskMetrics.volatility,
-      tradingStats.totalTrades,
-      summary.positionCount,
-      portfolioSnapshotsRef.current,
-    );
-    setCompetitionScore(score);
+
+    const fetchTradesForScore = async () => {
+      const userId = session?.user?.id;
+      if (!userId) return;
+
+      const { data: tradesData } = await supabase
+        .from("trades")
+        .select("placed_at, filled_at, symbol")
+        .eq("profile_id", userId)
+        .order("placed_at", { ascending: true });
+
+      const trades = tradesData ?? [];
+      
+      // Calculate unique symbols traded
+      const uniqueSymbols = new Set(
+        trades.map((t: any) => (t.symbol ?? "").toUpperCase().trim())
+      ).size;
+
+      const score = calculateCompetitionScore(
+        summary.totalPnLPercent,
+        riskMetrics.sharpeRatio,
+        riskMetrics.maxDrawdown,
+        riskMetrics.volatility,
+        trades, // ← Pass trades array
+        uniqueSymbols, // ← Pass unique symbols count
+        portfolioSnapshotsRef.current,
+      );
+
+      setCompetitionScore(score);
+    };
+
+    fetchTradesForScore();
   }, [
     summary.totalPnLPercent,
     summary.totalValue,
     riskMetrics,
-    tradingStats.totalTrades,
-    summary.positionCount,
+    tradingStats.totalTrades, // Triggers recalc when new trades happen
     loading,
     calculateCompetitionScore,
+    session?.user?.id,
   ]);
 
   // Fetch watchlist early
