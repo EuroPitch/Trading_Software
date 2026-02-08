@@ -22,20 +22,44 @@ const CompetitionScoreContext = createContext<
   CompetitionScoreContextType | undefined
 >(undefined);
 
+const STORAGE_KEY = 'competition_score_cache';
+const LAST_FETCH_KEY = 'competition_score_last_fetch';
+
 export const CompetitionScoreProvider = ({
   children,
 }: {
   children: React.ReactNode;
 }) => {
-  const [competitionScore, setCompetitionScore] = useState<CompetitionScore>({
-    returnScore: 0,
-    riskScore: 0,
-    consistencyScore: 0,
-    activityScore: 0,
-    totalScore: 0,
+  // Initialize from localStorage cache
+  const [competitionScore, setCompetitionScoreState] = useState<CompetitionScore>(() => {
+    const cached = localStorage.getItem(STORAGE_KEY);
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached);
+        console.log("💾 Loaded competition scores from cache:", parsed);
+        return parsed;
+      } catch (err) {
+        console.warn("Failed to parse cached scores:", err);
+      }
+    }
+    return {
+      returnScore: 0,
+      riskScore: 0,
+      consistencyScore: 0,
+      activityScore: 0,
+      totalScore: 0,
+    };
   });
+
   const [loading, setLoading] = useState(false);
   const { session } = useAuth();
+
+  // Wrapper to update both state and cache
+  const setCompetitionScore = useCallback((score: CompetitionScore) => {
+    setCompetitionScoreState(score);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(score));
+    localStorage.setItem(LAST_FETCH_KEY, Date.now().toString());
+  }, []);
 
   // Fetch competition score from Supabase
   const fetchCompetitionScore = useCallback(async () => {
@@ -76,11 +100,20 @@ export const CompetitionScoreProvider = ({
     } finally {
       setLoading(false);
     }
-  }, [session?.user?.id]);
+  }, [session?.user?.id, setCompetitionScore]);
 
-  // Initial fetch
+  // Initial fetch ONLY if cache is stale (older than 2 minutes)
   useEffect(() => {
-    fetchCompetitionScore();
+    const lastFetch = localStorage.getItem(LAST_FETCH_KEY);
+    const now = Date.now();
+    const TWO_MINUTES = 2 * 60 * 1000;
+
+    if (!lastFetch || now - parseInt(lastFetch) > TWO_MINUTES) {
+      console.log("🔄 Cache stale, fetching fresh competition scores");
+      fetchCompetitionScore();
+    } else {
+      console.log("✅ Using cached competition scores");
+    }
   }, [fetchCompetitionScore]);
 
   // Supabase Realtime subscription for instant updates
@@ -100,7 +133,7 @@ export const CompetitionScoreProvider = ({
           filter: `id=eq.${session.user.id}`,
         },
         (payload) => {
-          console.log("🔥 Competition score updated:", payload);
+          console.log("🔥 Competition score updated via Realtime:", payload);
           const newData = payload.new as any;
           setCompetitionScore({
             returnScore: newData.return_score || 0,
@@ -111,20 +144,35 @@ export const CompetitionScoreProvider = ({
           });
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          console.log('✅ Realtime subscription active');
+        }
+        if (status === 'CHANNEL_ERROR') {
+          console.error('❌ Realtime subscription failed');
+        }
+      });
 
     return () => {
       console.log("🔌 Cleaning up Realtime subscription for score");
       supabase.removeChannel(channel);
     };
-  }, [session?.user?.id]);
+  }, [session?.user?.id, setCompetitionScore]);
 
-  // Refresh when tab becomes visible
+  // Smart refresh on tab visibility - only if cache is old
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (!document.hidden && session?.user?.id) {
-        console.log("🔄 Tab focused - refreshing competition score");
-        fetchCompetitionScore();
+        const lastFetch = localStorage.getItem(LAST_FETCH_KEY);
+        const now = Date.now();
+        const FIVE_MINUTES = 5 * 60 * 1000;
+
+        if (!lastFetch || now - parseInt(lastFetch) > FIVE_MINUTES) {
+          console.log("🔄 Tab focused + stale cache - refreshing competition score");
+          fetchCompetitionScore();
+        } else {
+          console.log("⏭️ Tab focused but cache is fresh, skipping fetch");
+        }
       }
     };
 

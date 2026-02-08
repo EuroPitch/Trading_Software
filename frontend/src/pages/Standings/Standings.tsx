@@ -23,6 +23,19 @@ export default function Standings() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const sortProfiles = useCallback((profileList: Profile[]) => {
+    return [...profileList].sort((a, b) => {
+      const scoreA = a.competition_score || 0;
+      const scoreB = b.competition_score || 0;
+      
+      if (scoreB !== scoreA) {
+        return scoreB - scoreA;
+      }
+      
+      return (b.realized_pnl || 0) - (a.realized_pnl || 0);
+    });
+  }, []);
+
   const fetchStandings = useCallback(async () => {
     if (profiles.length === 0) {
       setLoading(true);
@@ -47,17 +60,7 @@ export default function Standings() {
 
       if (fetchError) throw fetchError;
 
-      const sortedProfiles = (data || []).sort((a, b) => {
-        const scoreA = a.competition_score || 0;
-        const scoreB = b.competition_score || 0;
-        
-        if (scoreB !== scoreA) {
-          return scoreB - scoreA;
-        }
-        
-        return (b.realized_pnl || 0) - (a.realized_pnl || 0);
-      });
-
+      const sortedProfiles = sortProfiles(data || []);
       setProfiles(sortedProfiles);
     } catch (err: any) {
       console.error("Error fetching standings:", err);
@@ -67,11 +70,73 @@ export default function Standings() {
         setLoading(false);
       }
     }
-  }, [profiles.length]);
+  }, [profiles.length, sortProfiles]);
 
+  // Initial fetch
   useEffect(() => {
     fetchStandings();
-    const interval = setInterval(fetchStandings, 30000);
+  }, []);
+
+  // Realtime subscription for instant updates
+  useEffect(() => {
+    console.log("📡 Setting up Realtime subscription for standings");
+
+    const channel = supabase
+      .channel('public:profiles')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'profiles',
+        },
+        (payload) => {
+          console.log("🔥 Profile updated via Realtime:", payload.new);
+          
+          setProfiles((current) => {
+            // Find and update the specific profile
+            const updated = current.map((profile) => {
+              if (profile.id === (payload.new as any).id) {
+                return {
+                  ...profile,
+                  society_name: (payload.new as any).society_name || profile.society_name,
+                  total_equity: (payload.new as any).total_equity ?? profile.total_equity,
+                  realized_pnl: (payload.new as any).realized_pnl ?? profile.realized_pnl,
+                  initial_capital: (payload.new as any).initial_capital ?? profile.initial_capital,
+                  competition_score: (payload.new as any).competition_score ?? profile.competition_score,
+                  return_score: (payload.new as any).return_score ?? profile.return_score,
+                  risk_score: (payload.new as any).risk_score ?? profile.risk_score,
+                  consistency_score: (payload.new as any).consistency_score ?? profile.consistency_score,
+                  activity_score: (payload.new as any).activity_score ?? profile.activity_score,
+                };
+              }
+              return profile;
+            });
+
+            // Re-sort after update
+            return sortProfiles(updated);
+          });
+        }
+      )
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          console.log('✅ Standings Realtime active');
+        }
+        if (status === 'CHANNEL_ERROR') {
+          console.error('❌ Standings Realtime failed');
+        }
+      });
+
+    return () => {
+      console.log('🔌 Cleaning up Realtime subscription for standings');
+      supabase.removeChannel(channel);
+    };
+  }, [sortProfiles]);
+
+  // Reduced polling interval - only as backup since we have Realtime
+  useEffect(() => {
+    // Poll every 5 minutes as a safety net
+    const interval = setInterval(fetchStandings, 5 * 60 * 1000);
     return () => clearInterval(interval);
   }, [fetchStandings]);
 
@@ -125,7 +190,6 @@ export default function Standings() {
               </div>
             </div>
           )}
-
 
           <div className="score-breakdown-legend">
             <h3>Score Breakdown</h3>
@@ -208,7 +272,7 @@ export default function Standings() {
             <p className="tiebreaker-note">
               In case of tied scores, P&L is used as tiebreaker
             </p>
-            <p className="refresh-note">⟳ Live updates every 30 seconds</p>
+            <p className="refresh-note">🔴 Realtime Live updates</p>
           </div>
         </>
       )}
