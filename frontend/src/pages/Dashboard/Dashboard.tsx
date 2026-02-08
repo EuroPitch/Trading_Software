@@ -196,7 +196,6 @@ export default function Dashboard() {
         side: position.positionType === "LONG" ? "sell" : "buy",
         quantity: Math.abs(position.quantity),
         price: currentPrice,
-        notional: closingNotional,
         order_type: "market",
         placed_at: new Date().toISOString(),
         filled_at: new Date().toISOString(),
