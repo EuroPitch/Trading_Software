@@ -4,6 +4,7 @@ import "./Standings.css";
 import { supabase } from "../../supabaseClient";
 import { useAuth } from "../../context/AuthContext";
 
+
 type Profile = {
   id: string;
   society_name: string;
@@ -17,11 +18,13 @@ type Profile = {
   activity_score: number;
 };
 
+
 export default function Standings() {
   const { session } = useAuth();
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
 
   const sortProfiles = useCallback((profileList: Profile[]) => {
     return [...profileList].sort((a, b) => {
@@ -36,11 +39,13 @@ export default function Standings() {
     });
   }, []);
 
+
   const fetchStandings = useCallback(async () => {
     if (profiles.length === 0) {
       setLoading(true);
     }
     setError(null);
+
 
     try {
       const { data, error: fetchError } = await supabase
@@ -56,9 +61,12 @@ export default function Standings() {
           risk_score,
           consistency_score,
           activity_score
-        `);
+        `)
+        .neq('society_name', 'Test Account (not competing)');
+
 
       if (fetchError) throw fetchError;
+
 
       const sortedProfiles = sortProfiles(data || []);
       setProfiles(sortedProfiles);
@@ -72,14 +80,17 @@ export default function Standings() {
     }
   }, [profiles.length, sortProfiles]);
 
+
   // Initial fetch
   useEffect(() => {
     fetchStandings();
   }, []);
 
+
   // Realtime subscription for instant updates
   useEffect(() => {
     console.log("📡 Setting up Realtime subscription for standings");
+
 
     const channel = supabase
       .channel('public:profiles')
@@ -92,6 +103,12 @@ export default function Standings() {
         },
         (payload) => {
           console.log("🔥 Profile updated via Realtime:", payload.new);
+          
+          // Skip test account updates
+          if ((payload.new as any).society_name === 'Test Account (not competing)') {
+            console.log("⏭️ Skipping test account update");
+            return;
+          }
           
           setProfiles((current) => {
             // Find and update the specific profile
@@ -113,6 +130,7 @@ export default function Standings() {
               return profile;
             });
 
+
             // Re-sort after update
             return sortProfiles(updated);
           });
@@ -127,11 +145,13 @@ export default function Standings() {
         }
       });
 
+
     return () => {
       console.log('🔌 Cleaning up Realtime subscription for standings');
       supabase.removeChannel(channel);
     };
   }, [sortProfiles]);
+
 
   // Reduced polling interval - only as backup since we have Realtime
   useEffect(() => {
@@ -140,10 +160,13 @@ export default function Standings() {
     return () => clearInterval(interval);
   }, [fetchStandings]);
 
+
   const formatCurrency = (value: number) =>
     new Intl.NumberFormat("en-UK", { style: "currency", currency: "EUR" }).format(value);
 
+
   const formatPercent = (value: number) => `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
+
 
   const calculateReturn = (profile: Profile) => {
     const initial = profile.initial_capital || 100000;
@@ -151,12 +174,14 @@ export default function Standings() {
     return ((profile.total_equity - initial) / initial) * 100;
   };
 
+
   return (
     <div className="standings-container">
       <div className="standings-header">
         <h1>EuroPitch Portfolio Round Leaderboard</h1>
         <p className="subtitle">Track your society's performance against other societies</p>
       </div>
+
 
       {loading ? (
         <div className="loading">Loading leaderboard...</div>
@@ -177,11 +202,13 @@ export default function Standings() {
                 <div className="podium-score">{profiles[1].competition_score || 0} pts</div>
               </div>
 
+
               <div className="podium-place first">
                 <div className="podium-medal"></div>
                 <h3 className="podium-society">{profiles[0].society_name}</h3>
                 <div className="podium-score">{profiles[0].competition_score || 0} pts</div>
               </div>
+
 
               <div className="podium-place third">
                 <div className="podium-medal"></div>
@@ -190,6 +217,7 @@ export default function Standings() {
               </div>
             </div>
           )}
+
 
           <div className="score-breakdown-legend">
             <h3>Score Breakdown</h3>
@@ -213,6 +241,7 @@ export default function Standings() {
             </div>
           </div>
 
+
           <div className="standings-table-container">
             <table className="standings-table">
               <thead>
@@ -233,6 +262,7 @@ export default function Standings() {
                 {profiles.map((profile, index) => {
                   const returnPercent = calculateReturn(profile);
                   const isCurrentUser = session?.user?.id === profile.id;
+
 
                   return (
                     <tr key={profile.id} className={isCurrentUser ? "current-user" : ""}>
@@ -268,11 +298,12 @@ export default function Standings() {
             </table>
           </div>
 
+
           <div className="standings-footer">
             <p className="tiebreaker-note">
               In case of tied scores, P&L is used as tiebreaker
             </p>
-            <p className="refresh-note">🔴 Realtime Live updates</p>
+            <p className="refresh-note">⟳ Realtime Live updates</p>
           </div>
         </>
       )}
