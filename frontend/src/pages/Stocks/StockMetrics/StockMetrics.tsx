@@ -496,6 +496,27 @@ function StockMetricsContent() {
     }));
   };
 
+  const exportToCSV = () => {
+    const headers = allColumns
+      .filter((col) => visibleColumns.includes(col.key))
+      .map((col) => col.label);
+
+    const rows = filteredAndSortedStocks.map((stock) =>
+      allColumns
+        .filter((col) => visibleColumns.includes(col.key))
+        .map((col) => stock[col.key as keyof Stock])
+    );
+
+    const csvContent = [headers.join(","), ...rows.map((row) => row.join(","))].join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv" });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `stock-metrics-${new Date().toISOString().split("T")[0]}.csv`;
+    a.click();
+  };
+
   const filteredAndSortedStocks = useMemo(() => {
     let filtered = stocks.filter((stock) => {
       const matchesSearch =
@@ -628,6 +649,9 @@ function StockMetricsContent() {
             </div>
           </div>
           <div className="header-actions">
+            <button className="btn-secondary" onClick={exportToCSV}>
+              Download Prices as CSV
+            </button>
             <button className="btn-secondary" onClick={() => setShowColumnCustomizer(!showColumnCustomizer)}>
               Customise Columns
             </button>
