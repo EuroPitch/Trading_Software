@@ -1,4 +1,0 @@
-# Backend scripts (cache_fundamentals.py, etc.)
-supabase>=2.0.0
-yfinance>=0.2.58
-python-dotenv>=1.0.0
