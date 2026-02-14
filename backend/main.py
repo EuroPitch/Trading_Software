@@ -4,6 +4,8 @@ import openpyxl
 import pandas as pd
 import pickle
 import xlsxwriter
+
+import yfinance
 from backend.prices.data_download import (
     download_data_for_tickers,
     load_saved_data,
@@ -132,3 +134,55 @@ if __name__ == "__main__":
 
             # Combine and save data to Excel
             combined_data = combine_and_save_data(daily_portfolio_values, daily_cash_position, daily_dividends)
+
+
+
+import pandas as pd
+
+tickerRequired = "c" #Change it as per need
+
+NumberOfNewsItems = 10
+
+mainDictionary = {"Title":[], "summary":[],"link":[],"Date":[]}
+
+try:
+    dat = y.Ticker(tickerRequired)
+    l = dat.get_news(count=NumberOfNewsItems, tab='news')
+    for i in range(NumberOfNewsItems):
+        try:
+            if (i):
+                print(f"{i}.")
+                print(f"Title: "+l[i]["content"]["title"],end="")
+                mainDictionary["Title"].append(l[i]["content"]["title"])
+                if (l[i]["content"]["displayTime"]):
+                    print(". Published: "+l[i]["content"]["displayTime"])
+                    mainDictionary["Date"].append(l[i]["content"]["displayTime"])
+                else:
+                    mainDictionary["Date"].append(" ")
+                if(l[i]["content"]["description"]):
+                    print("Description: "+l[i]["content"]["description"])
+
+                if (l[i]["content"]["summary"]):
+                    print("Summary: " + l[i]["content"]["summary"])
+                    mainDictionary["summary"].append(l[i]["content"]["summary"])
+                else:
+                    mainDictionary["summary"].append(" ")
+                if (l[i]["content"]["clickThroughUrl"]!=None):
+                    # print("Click the link to view more: "+l[i]["content"]["clickThroughUrl"]["url"])
+                    print("Click the link to view more: " + l[i]["content"]["clickThroughUrl"]["url"])
+
+                    mainDictionary["link"].append(l[i]["content"]["clickThroughUrl"]["url"])
+                else:
+                    mainDictionary["link"].append(" ")
+                    #print(send_request(l[i]["content"]["clickThroughUrl"]["url"]))
+
+
+        except:
+            # print("iobuisrg")
+            continue
+except:
+    print("Sorry! We couldn't find a stock with that ticker!")
+
+
+df = pd.DataFrame(mainDictionary)
+df.to_json('output.json')
