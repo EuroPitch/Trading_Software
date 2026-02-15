@@ -687,6 +687,8 @@ export default function Dashboard() {
     allTimeUniqueSymbols: number,
     snapshots: PortfolioSnapshot[],
   ): CompetitionScore => {
+    const now = Date.now();
+    const oneDayMs = 24 * 60 * 60 * 1000;
     // RETURN SCORE: Asymmetric penalty for losses (losses hurt 3x more)
     // Range: -16.67% return = 0, 0% = 50, +16.67% = 100
     const returnScore =
@@ -694,18 +696,66 @@ export default function Dashboard() {
         ? Math.min(100, 50 + totalReturn * 3)
         : Math.max(0, 50 + totalReturn * 9); // 9 = 3x penalty multiplier
 
-    // RISK SCORE: Sharpe ratio (70%) + drawdown management (30%)
-    // Sharpe component: 0-70 points (3.0+ Sharpe = max 70)
-    const sharpeScore = Math.min((Math.max(sharpe, 0) / 3.0) * 70, 70);
+    // RISK SCORE: Sharpe ratio (50%) + drawdown management (30%) + volatility penalty (20%)
 
-    // Drawdown component: 0-30 points (0% DD = 30, 50%+ DD = 0)
-    const drawdownScore = Math.max(0, 30 - maxDrawdown * 0.6);
+    // 1. SHARPE RATIO COMPONENT (50 points max)
+    // Adjust target based on competition duration
+    const daysSinceStart = (now - new Date(initialCapital).getTime()) / oneDayMs;
+    const weeksSinceStart = Math.max(daysSinceStart / 7, 1);
 
-    const riskScore = Math.max(0, Math.min(100, sharpeScore + drawdownScore));
+    // Adaptive Sharpe target: shorter duration = higher target required
+    // Week 1-2: Need Sharpe 4.0+ for max score (filters out single lucky trades)
+    // Week 3-4: Need Sharpe 3.5+
+    // Month 2+: Need Sharpe 3.0+ (institutional standard)
+    let sharpeTarget = 3.0;
+    if (weeksSinceStart < 2) {
+      sharpeTarget = 5.0; // First 2 weeks: very high bar
+    } else if (weeksSinceStart < 4) {
+      sharpeTarget = 4.0; // Weeks 3-4: high bar
+    } else if (weeksSinceStart < 8) {
+      sharpeTarget = 3.5; // Weeks 5-8: elevated bar
+    }
+
+    // Logarithmic scaling instead of linear - diminishing returns
+    const sharpeScore = Math.min(
+      (Math.log(1 + Math.max(sharpe, 0)) / Math.log(1 + sharpeTarget)) * 50,
+      50
+    );
+
+    // 2. DRAWDOWN COMPONENT (30 points max)
+    // More aggressive penalties for drawdowns
+    // 0% DD = 30, 10% DD = 24, 20% DD = 15, 30% DD = 6, 40%+ DD = 0
+    const drawdownScore = Math.max(0, 30 * Math.exp(-maxDrawdown / 15));
+
+    // 3. VOLATILITY PENALTY (20 points max)
+    // Penalize high volatility even if Sharpe is good (prevents lucky gambling)
+    // 10% annualized vol = 20 points, 20% vol = 15 points, 30% vol = 10 points, 50%+ vol = 0
+    const volatilityScore = Math.max(0, 20 * Math.exp(-volatility / 20));
+
+    // 4. CONSISTENCY BONUS (bonus up to 10 points)
+    // Reward consistently positive returns across measurement periods
+    let consistencyBonus = 0;
+    if (snapshots.length >= 7) { // Need at least a week of data
+      const positiveSnapshots = snapshots.filter(s => s.dailyReturn > 0).length;
+      const positiveRatio = positiveSnapshots / snapshots.length;
+      
+      // 70%+ positive days = +10 bonus, 60% = +5, 50% = 0, below = penalty
+      if (positiveRatio >= 0.7) {
+        consistencyBonus = 10;
+      } else if (positiveRatio >= 0.6) {
+        consistencyBonus = 5;
+      } else if (positiveRatio < 0.4) {
+        consistencyBonus = -5; // Penalty for very erratic returns
+      }
+    }
+
+    const riskScore = Math.max(
+      0, 
+      Math.min(100, sharpeScore + drawdownScore + volatilityScore + consistencyBonus)
+    );
+
 
     // CONSISTENCY SCORE: Positive return ratio + volatility penalty (with recency weighting)
-    const now = Date.now();
-    const oneDayMs = 24 * 60 * 60 * 1000;
     const consistencyHalfLifeDays = 14; // 2-week half-life for consistency
     const consistencyHalfLifeMs = consistencyHalfLifeDays * oneDayMs;
 
