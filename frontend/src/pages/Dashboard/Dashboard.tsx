@@ -99,6 +99,7 @@ export default function Dashboard() {
   const [realizedPnLData, setRealizedPnLData] = useState<
     { date: string; pnl: number }[]
   >([]);
+  const [recentTrades, setRecentTrades] = useState<any[]>([]);
   const { session, loading: authLoading } = useAuth();
   const { watchlist: contextWatchlist, removeFromWatchlist } = useWatchlist();
   const [watchlist, setWatchlist] = useState<string[]>([]);
@@ -961,8 +962,14 @@ export default function Dashboard() {
           .order("placed_at", { ascending: true });
 
         if (fetchError) throw fetchError;
-
         const trades = tradesData ?? [];
+
+        // Extract 10 most recent trades for display
+        const sortedTrades = [...trades].sort(
+          (a, b) => new Date(b.placed_at ?? 0).getTime() - new Date(a.placed_at ?? 0).getTime()
+        );
+        setRecentTrades(sortedTrades.slice(0, 10));
+
         const symbolNameMap = new Map<string, string>();
         const positionsMap = new Map<string, any>();
 
@@ -1968,6 +1975,79 @@ export default function Dashboard() {
             ) : (
               <div className="watchlist-empty">
                 <p>Your watchlist is empty. Add stocks to track them here.</p>
+              </div>
+            )}
+          </div>
+
+          {/* Recent Trades Section */}
+          <div className="trading-stats-section">
+            <h2>Recent Trades</h2>
+            
+            {recentTrades.length > 0 ? (
+              <div className="table-container">
+                <table className="positions-table">
+                  <thead>
+                    <tr>
+                      <th>Date/Time</th>
+                      <th>Symbol</th>
+                      <th>Side</th>
+                      <th>Quantity</th>
+                      <th>Price</th>
+                      <th>Total Value</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {recentTrades.map((trade, idx) => {
+                      const side = (trade.side ?? "buy").toLowerCase();
+                      const notional = Number(
+                        trade.notional ?? Number(trade.quantity ?? 0) * Number(trade.price ?? 0)
+                      );
+                      const tradeDate = new Date(trade.placed_at ?? trade.filled_at ?? new Date());
+                      
+                      return (
+                        <tr key={`${trade.id}-${idx}`}>
+                          <td>
+                            <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                              <span style={{ fontWeight: 600 }}>
+                                {tradeDate.toLocaleDateString("en-GB", {
+                                  day: "2-digit",
+                                  month: "short",
+                                  year: "numeric",
+                                })}
+                              </span>
+                              <span style={{ fontSize: "0.85rem", color: "#9aa3b2" }}>
+                                {tradeDate.toLocaleTimeString("en-GB", {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })}
+                              </span>
+                            </div>
+                          </td>
+                          <td>
+                            <strong style={{ color: "#FFFFFF" }}>{trade.symbol}</strong>
+                          </td>
+                          <td>
+                            <span className={`position-badge ${side === "buy" ? "long" : "short"}`}>
+                              {side}
+                            </span>
+                          </td>
+                          <td>
+                            {Number(trade.quantity ?? 0).toLocaleString("en-US", {
+                              minimumFractionDigits: 0,
+                              maximumFractionDigits: 2,
+                            })}
+                          </td>
+                          <td>{formatCurrency(Number(trade.price ?? 0))}</td>
+                          <td style={{ fontWeight: 600 }}>{formatCurrency(notional)}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="empty-state">
+                <p>No trades yet. Start trading to see your history here.</p>
               </div>
             )}
           </div>
