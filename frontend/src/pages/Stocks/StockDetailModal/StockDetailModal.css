@@ -13,6 +13,20 @@
   backdrop-filter: blur(8px);
 }
 
+@media (max-width: 768px) {
+  .modal-overlay {
+    padding: 12px;
+    align-items: flex-end;
+  }
+}
+
+@media (max-width: 640px) {
+  .modal-overlay {
+    padding: 8px;
+    align-items: stretch;
+  }
+}
+
 .modal-content {
   background: linear-gradient(135deg, rgba(0, 24, 69, 0.95) 0%, rgba(0, 40, 85, 0.95) 100%);
   border-radius: 12px;
@@ -24,6 +38,20 @@
   border: 1px solid rgba(201, 169, 97, 0.3);
 }
 
+@media (max-width: 768px) {
+  .modal-content {
+    max-height: 85vh;
+    border-radius: 12px 12px 0 0;
+  }
+}
+
+@media (max-width: 640px) {
+  .modal-content {
+    max-height: 100%;
+    border-radius: 8px 8px 0 0;
+  }
+}
+
 .modal-header {
   display: flex;
   justify-content: space-between;
@@ -33,11 +61,35 @@
   background: linear-gradient(135deg, rgba(0, 40, 85, 0.4) 0%, rgba(0, 24, 69, 0.2) 100%);
 }
 
+@media (max-width: 768px) {
+  .modal-header {
+    padding: 16px;
+  }
+}
+
+@media (max-width: 640px) {
+  .modal-header {
+    padding: 12px;
+  }
+}
+
 .modal-header h2 {
   font-size: 28px;
   font-weight: 700;
   color: #ffffff;
   margin: 0 0 4px 0;
+}
+
+@media (max-width: 768px) {
+  .modal-header h2 {
+    font-size: 22px;
+  }
+}
+
+@media (max-width: 640px) {
+  .modal-header h2 {
+    font-size: 18px;
+  }
 }
 
 .modal-subtitle {
@@ -74,6 +126,22 @@
   padding: 24px;
   background: rgba(0, 40, 85, 0.2);
   border-bottom: 1px solid rgba(201, 169, 97, 0.15);
+}
+
+@media (max-width: 768px) {
+  .stock-summary {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    padding: 16px;
+  }
+}
+
+@media (max-width: 640px) {
+  .stock-summary {
+    grid-template-columns: 1fr;
+    gap: 10px;
+    padding: 12px;
+  }
 }
 
 .summary-item {

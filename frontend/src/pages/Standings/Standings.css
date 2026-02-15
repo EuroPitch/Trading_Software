@@ -7,6 +7,18 @@
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', sans-serif;
 }
 
+@media (max-width: 768px) {
+  .standings-container {
+    padding: 16px;
+  }
+}
+
+@media (max-width: 640px) {
+  .standings-container {
+    padding: 8px;
+  }
+}
+
 .loading-spinner {
   display: flex;
   justify-content: center;
@@ -26,11 +38,32 @@
   gap: 20px;
 }
 
+@media (max-width: 768px) {
+  .standings-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+}
+
 .header-content h1 {
   font-size: 32px;
   font-weight: 700;
   color: #FFFFFF;
   margin: 0 0 8px 0;
+}
+
+@media (max-width: 768px) {
+  .header-content h1 {
+    font-size: 24px;
+  }
+}
+
+@media (max-width: 640px) {
+  .header-content h1 {
+    font-size: 20px;
+  }
 }
 
 .header-subtitle {
@@ -48,6 +81,12 @@
   border: 1px solid rgba(201, 169, 97, 0.2);
 }
 
+@media (max-width: 640px) {
+  .timeframe-selector {
+    width: 100%;
+  }
+}
+
 .timeframe-btn {
   padding: 10px 20px;
   background: transparent;
@@ -58,6 +97,14 @@
   color: #B8C5D6;
   cursor: pointer;
   transition: all 0.2s;
+}
+
+@media (max-width: 640px) {
+  .timeframe-btn {
+    flex: 1;
+    padding: 8px 12px;
+    font-size: 12px;
+  }
 }
 
 .timeframe-btn:hover {
@@ -76,6 +123,12 @@
   margin-bottom: 32px;
 }
 
+@media (max-width: 640px) {
+  .podium-section {
+    margin-bottom: 24px;
+  }
+}
+
 .podium-section h2 {
   font-size: 24px;
   font-weight: 600;
@@ -83,10 +136,38 @@
   margin-bottom: 20px;
 }
 
+@media (max-width: 768px) {
+  .podium-section h2 {
+    font-size: 20px;
+    margin-bottom: 16px;
+  }
+}
+
+@media (max-width: 640px) {
+  .podium-section h2 {
+    font-size: 18px;
+    margin-bottom: 12px;
+  }
+}
+
 .podium-cards {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
   gap: 20px;
+}
+
+@media (max-width: 768px) {
+  .podium-cards {
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 12px;
+  }
+}
+
+@media (max-width: 640px) {
+  .podium-cards {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
 }
 
 .podium-card {
