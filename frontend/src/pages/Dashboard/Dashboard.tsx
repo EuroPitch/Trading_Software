@@ -698,60 +698,61 @@ export default function Dashboard() {
 
     // RISK SCORE: Sharpe ratio (50%) + drawdown management (30%) + volatility penalty (20%)
 
-    // 1. SHARPE RATIO COMPONENT (50 points max)
-    // Adjust target based on competition duration
-    const daysSinceStart = (now - new Date(initialCapital).getTime()) / oneDayMs;
-    const weeksSinceStart = Math.max(daysSinceStart / 7, 1);
+    // Calculate data reliability factor based on sample size
+    const snapshotCount = snapshots.length;
+    const minSignificantSamples = 168; // 1 week of hourly data
+    const highConfidenceSamples = 672; // 4 weeks of hourly data
 
-    // Adaptive Sharpe target: shorter duration = higher target required
-    // Week 1-2: Need Sharpe 4.0+ for max score (filters out single lucky trades)
-    // Week 3-4: Need Sharpe 3.5+
-    // Month 2+: Need Sharpe 3.0+ (institutional standard)
-    let sharpeTarget = 3.0;
-    if (weeksSinceStart < 2) {
-      sharpeTarget = 5.0; // First 2 weeks: very high bar
-    } else if (weeksSinceStart < 4) {
-      sharpeTarget = 4.0; // Weeks 3-4: high bar
-    } else if (weeksSinceStart < 8) {
-      sharpeTarget = 3.5; // Weeks 5-8: elevated bar
+    // Confidence factor: 0-1 based on data points
+    // Less than 1 week = 0-0.3 confidence
+    // 1-4 weeks = 0.3-0.8 confidence  
+    // 4+ weeks = 0.8-1.0 confidence
+    let confidenceFactor = 0;
+    if (snapshotCount < minSignificantSamples) {
+      confidenceFactor = Math.min(snapshotCount / minSignificantSamples, 1.0) * 0.3;
+    } else if (snapshotCount < highConfidenceSamples) {
+      confidenceFactor = 0.3 + ((snapshotCount - minSignificantSamples) / (highConfidenceSamples - minSignificantSamples)) * 0.5;
+    } else {
+      confidenceFactor = 0.8 + Math.min((snapshotCount - highConfidenceSamples) / highConfidenceSamples, 0.5) * 0.2;
     }
 
-    // Logarithmic scaling instead of linear - diminishing returns
-    const sharpeScore = Math.min(
+    // 1. SHARPE RATIO COMPONENT (50 points max)
+    // Use logarithmic scaling to prevent maxing with lucky streaks
+    const sharpeTarget = 3.0;
+    const rawSharpeScore = Math.min(
       (Math.log(1 + Math.max(sharpe, 0)) / Math.log(1 + sharpeTarget)) * 50,
       50
     );
 
+    // Apply confidence penalty - early high Sharpes get heavily discounted
+    const sharpeScore = rawSharpeScore * (0.3 + 0.7 * confidenceFactor);
+
     // 2. DRAWDOWN COMPONENT (30 points max)
-    // More aggressive penalties for drawdowns
-    // 0% DD = 30, 10% DD = 24, 20% DD = 15, 30% DD = 6, 40%+ DD = 0
-    const drawdownScore = Math.max(0, 30 * Math.exp(-maxDrawdown / 15));
+    // Exponential penalty for drawdowns
+    const rawDrawdownScore = Math.max(0, 30 * Math.exp(-maxDrawdown / 15));
+
+    // Small sample penalty: if max DD is tiny, it might just be luck
+    // Penalize perfect scores early on
+    let drawdownScore = rawDrawdownScore;
+    if (maxDrawdown < 2.0 && confidenceFactor < 0.5) {
+      // Less than 2% drawdown with < 2 weeks data = probably just lucky
+      drawdownScore = rawDrawdownScore * 0.6; // 40% penalty
+    }
 
     // 3. VOLATILITY PENALTY (20 points max)
-    // Penalize high volatility even if Sharpe is good (prevents lucky gambling)
-    // 10% annualized vol = 20 points, 20% vol = 15 points, 30% vol = 10 points, 50%+ vol = 0
-    const volatilityScore = Math.max(0, 20 * Math.exp(-volatility / 20));
+    // Low volatility early on suggests few trades or small positions
+    const rawVolatilityScore = Math.max(0, 20 * Math.exp(-volatility / 20));
 
-    // 4. CONSISTENCY BONUS (bonus up to 10 points)
-    // Reward consistently positive returns across measurement periods
-    let consistencyBonus = 0;
-    if (snapshots.length >= 7) { // Need at least a week of data
-      const positiveSnapshots = snapshots.filter(s => s.dailyReturn > 0).length;
-      const positiveRatio = positiveSnapshots / snapshots.length;
-      
-      // 70%+ positive days = +10 bonus, 60% = +5, 50% = 0, below = penalty
-      if (positiveRatio >= 0.7) {
-        consistencyBonus = 10;
-      } else if (positiveRatio >= 0.6) {
-        consistencyBonus = 5;
-      } else if (positiveRatio < 0.4) {
-        consistencyBonus = -5; // Penalty for very erratic returns
-      }
+    // Penalize artificially low volatility (< 15%) in early weeks
+    let volatilityScore = rawVolatilityScore;
+    if (volatility < 15 && confidenceFactor < 0.5) {
+      // Suspiciously low volatility = probably not enough trading
+      volatilityScore = rawVolatilityScore * 0.5; // 50% penalty
     }
 
     const riskScore = Math.max(
-      0, 
-      Math.min(100, sharpeScore + drawdownScore + volatilityScore + consistencyBonus)
+      0,
+      Math.min(100, sharpeScore + drawdownScore + volatilityScore)
     );
 
 
