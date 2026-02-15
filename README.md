@@ -2,7 +2,7 @@
 
 ## Introduction
 
-Welcome to the Trading Software for EuroPitch. This Python-based tool is designed to streamline and enhance the management of our investment portfolio. This project aims to be a valuable resource for members of the SMIF interested in computer science and intended to provide a gateway to working with Python in finance.
+Welcome to the Trading Software for EuroPitch. This Python-based tool is designed to streamline and enhance the management of our investment portfolio. This project aims to be a valuable resource for members of EuroPitch interested in computer science and intended to provide a gateway to working with Python in finance.
 
 ### Features
 
@@ -14,7 +14,7 @@ Welcome to the Trading Software for EuroPitch. This Python-based tool is designe
 
 ## Motivation and Background
 
-This project was initiated to address the need for a more streamlined and accessible tool for managing our portfolio. It is supposed to be used by students who are interested in finance and computer science. The project is intended to be a resource for members of the SMIF interested in computer science; a place where they can apply their skills to a real-world (ish) scenario.
+This project was initiated to address the need for a more streamlined and accessible tool for managing our portfolio. It is supposed to be used by students who are interested in finance and computer science. The project is intended to be a resource for members of EuroPitch interested in computer science; a place where they can apply their skills to a real-world (ish) scenario.
 
 ## How does it work?
 
@@ -28,7 +28,7 @@ This get the latest exchange rate data from the ECB's published historical data.
 
 - With all the data updated you can run `python3 main.py --daily-dump or --weekly-report` to produce the daily dump or weekly report respectively.
 
-- I'm using cron and rclone to run the script at specified times and then upload the data to our SMIF google drive.
+- I'm using cron and rclone to run the script at specified times and then upload the data to our EuroPitch google drive.
 
 ## Installation and Setup
 
