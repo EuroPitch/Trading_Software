@@ -32,6 +32,13 @@
   border: 1px solid rgba(201, 169, 97, 0.15);
 }
 
+@media (max-width: 768px) {
+  .auth-wrapper {
+    grid-template-columns: 1fr;
+    max-width: 500px;
+  }
+}
+
 .auth-wrapper.single-column {
   display: flex;
   justify-content: center;
@@ -50,6 +57,19 @@
   background: #FFFFFF;
 }
 
+@media (max-width: 768px) {
+  .auth-card {
+    padding: 32px 24px;
+    max-height: auto;
+  }
+}
+
+@media (max-width: 640px) {
+  .auth-card {
+    padding: 24px 16px;
+  }
+}
+
 .signup-card {
   padding: 40px 48px;
 }
@@ -58,6 +78,12 @@
 .auth-header {
   text-align: center;
   margin-bottom: 32px;
+}
+
+@media (max-width: 640px) {
+  .auth-header {
+    margin-bottom: 24px;
+  }
 }
 
 .auth-logo {
@@ -84,6 +110,18 @@
   font-weight: 700;
   color: #1a2332;
   margin: 0 0 8px 0;
+}
+
+@media (max-width: 768px) {
+  .auth-header h2 {
+    font-size: 22px;
+  }
+}
+
+@media (max-width: 640px) {
+  .auth-header h2 {
+    font-size: 20px;
+  }
 }
 
 .auth-header p {
