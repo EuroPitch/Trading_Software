@@ -748,214 +748,119 @@ export default function Dashboard() {
   );
 
   const calculateCompetitionScore = useCallback(
-  (
-    totalReturn: number,
-    sharpe: number,
-    maxDrawdown: number,
-    volatility: number,
-    trades: any[], // ← CHANGED: Pass full trades array instead of totalTrades count
-    allTimeUniqueSymbols: number,
-    snapshots: PortfolioSnapshot[],
-  ): CompetitionScore => {
-    const now = Date.now();
-    const oneDayMs = 24 * 60 * 60 * 1000;
-    // RETURN SCORE: Asymmetric penalty for losses (losses hurt 3x more)
-    // Range: -16.67% return = 0, 0% = 50, +16.67% = 100
-    const returnScore =
-      totalReturn >= 0
-        ? Math.min(100, 50 + totalReturn * 3)
-        : Math.max(0, 50 + totalReturn * 9); // 9 = 3x penalty multiplier
+    (
+      totalReturn: number,
+      sharpe: number,
+      maxDrawdown: number,
+      volatility: number,
+      trades: any[], // ← CHANGED: Pass full trades array instead of totalTrades count
+      allTimeUniqueSymbols: number,
+      snapshots: PortfolioSnapshot[],
+    ): CompetitionScore => {
+      const now = Date.now();
+      const oneDayMs = 24 * 60 * 60 * 1000;
+      // RETURN SCORE: Asymmetric penalty for losses (losses hurt 3x more)
+      // Range: -16.67% return = 0, 0% = 50, +16.67% = 100
+      const returnScore =
+        totalReturn >= 0
+          ? Math.min(100, 50 + totalReturn * 3)
+          : Math.max(0, 50 + totalReturn * 9); // 9 = 3x penalty multiplier
 
-    // RISK SCORE: Sharpe ratio (50%) + drawdown management (30%) + volatility penalty (20%)
+      // RISK SCORE: Sharpe ratio (50%) + drawdown management (30%) + volatility penalty (20%)
 
-    // Calculate data reliability factor based on sample size
-    const snapshotCount = snapshots.length;
-    const minSignificantSamples = 168; // 1 week of hourly data
-    const highConfidenceSamples = 672; // 4 weeks of hourly data
+      // Calculate data reliability factor based on sample size
+      const snapshotCount = snapshots.length;
+      const minSignificantSamples = 168; // 1 week of hourly data
+      const highConfidenceSamples = 672; // 4 weeks of hourly data
 
-    // Confidence factor: 0-1 based on data points
-    // Less than 1 week = 0-0.3 confidence
-    // 1-4 weeks = 0.3-0.8 confidence  
-    // 4+ weeks = 0.8-1.0 confidence
-    let confidenceFactor = 0;
-    if (snapshotCount < minSignificantSamples) {
-      confidenceFactor = Math.min(snapshotCount / minSignificantSamples, 1.0) * 0.3;
-    } else if (snapshotCount < highConfidenceSamples) {
-      confidenceFactor = 0.3 + ((snapshotCount - minSignificantSamples) / (highConfidenceSamples - minSignificantSamples)) * 0.5;
-    } else {
-      confidenceFactor = 0.8 + Math.min((snapshotCount - highConfidenceSamples) / highConfidenceSamples, 0.5) * 0.2;
-    }
-
-    // 1. SHARPE RATIO COMPONENT (50 points max)
-    // Use logarithmic scaling to prevent maxing with lucky streaks
-    const sharpeTarget = 3.0;
-    const rawSharpeScore = Math.min(
-      (Math.log(1 + Math.max(sharpe, 0)) / Math.log(1 + sharpeTarget)) * 50,
-      50
-    );
-
-    // Apply confidence penalty - early high Sharpes get heavily discounted
-    const sharpeScore = rawSharpeScore * (0.3 + 0.7 * confidenceFactor);
-
-    // 2. DRAWDOWN COMPONENT (30 points max)
-    // Exponential penalty for drawdowns
-    const rawDrawdownScore = Math.max(0, 30 * Math.exp(-maxDrawdown / 15));
-
-    // Small sample penalty: if max DD is tiny, it might just be luck
-    // Penalize perfect scores early on
-    let drawdownScore = rawDrawdownScore;
-    if (maxDrawdown < 2.0 && confidenceFactor < 0.5) {
-      // Less than 2% drawdown with < 2 weeks data = probably just lucky
-      drawdownScore = rawDrawdownScore * 0.6; // 40% penalty
-    }
-
-    // 3. VOLATILITY PENALTY (20 points max)
-    // Low volatility early on suggests few trades or small positions
-    const rawVolatilityScore = Math.max(0, 20 * Math.exp(-volatility / 20));
-
-    // Penalize artificially low volatility (< 15%) in early weeks
-    let volatilityScore = rawVolatilityScore;
-    if (volatility < 15 && confidenceFactor < 0.5) {
-      // Suspiciously low volatility = probably not enough trading
-      volatilityScore = rawVolatilityScore * 0.5; // 50% penalty
-    }
-
-    const riskScore = Math.max(
-      0,
-      Math.min(100, sharpeScore + drawdownScore + volatilityScore)
-    );
-
-
-    // CONSISTENCY SCORE: Positive return ratio + volatility penalty (with recency weighting)
-    const consistencyHalfLifeDays = 14; // 2-week half-life for consistency
-    const consistencyHalfLifeMs = consistencyHalfLifeDays * oneDayMs;
-
-    let weightedPositiveDays = 0;
-    let totalWeight = 0;
-
-    snapshots.forEach((snapshot) => {
-      const snapshotTime = snapshot.timestamp.getTime();
-      const ageMs = now - snapshotTime;
-      
-      // Exponential decay: recent days weighted more heavily
-      const decayFactor = Math.exp(-ageMs / consistencyHalfLifeMs);
-      
-      totalWeight += decayFactor;
-      
-      if (snapshot.dailyReturn > 0) {
-        weightedPositiveDays += decayFactor;
+      // Confidence factor: 0-1 based on data points
+      // Less than 1 week = 0-0.3 confidence
+      // 1-4 weeks = 0.3-0.8 confidence
+      // 4+ weeks = 0.8-1.0 confidence
+      let confidenceFactor = 0;
+      if (snapshotCount < minSignificantSamples) {
+        confidenceFactor =
+          Math.min(snapshotCount / minSignificantSamples, 1.0) * 0.3;
+      } else if (snapshotCount < highConfidenceSamples) {
+        confidenceFactor =
+          0.3 +
+          ((snapshotCount - minSignificantSamples) /
+            (highConfidenceSamples - minSignificantSamples)) *
+            0.5;
+      } else {
+        confidenceFactor =
+          0.8 +
+          Math.min(
+            (snapshotCount - highConfidenceSamples) / highConfidenceSamples,
+            0.5,
+          ) *
+            0.2;
       }
-    });
 
-      // RISK SCORE: Sharpe ratio (70%) + drawdown management (30%)
-      // Sharpe component: 0-70 points (3.0+ Sharpe = max 70)
-      const sharpeScore = Math.min((Math.max(sharpe, 0) / 3.0) * 70, 70);
+      // 1. SHARPE RATIO COMPONENT (50 points max)
+      // Use logarithmic scaling to prevent maxing with lucky streaks
+      const sharpeTarget = 3.0;
+      const rawSharpeScore = Math.min(
+        (Math.log(1 + Math.max(sharpe, 0)) / Math.log(1 + sharpeTarget)) * 50,
+        50,
+      );
 
-      // Drawdown component: 0-30 points (0% DD = 30, 50%+ DD = 0)
-      const drawdownScore = Math.max(0, 30 - maxDrawdown * 0.6);
+      // Apply confidence penalty - early high Sharpes get heavily discounted
+      const sharpeScore = rawSharpeScore * (0.3 + 0.7 * confidenceFactor);
 
-      const riskScore = Math.max(0, Math.min(100, sharpeScore + drawdownScore));
+      // 2. DRAWDOWN COMPONENT (30 points max)
+      // Exponential penalty for drawdowns
+      const rawDrawdownScore = Math.max(0, 30 * Math.exp(-maxDrawdown / 15));
 
-    // ACTIVITY SCORE: Time-decayed trades + diversification + trading frequency regularity
-    const halfLifeDays = 7; // Activity "half-life" of 7 days
-    const halfLifeMs = halfLifeDays * oneDayMs;
-
-    let weightedTradeCount = 0;
-    const tradeDays = new Set<string>(); // Track unique trading days
-    const tradeTimestamps: number[] = [];
-
-    // Calculate weighted trade count with exponential decay
-    trades.forEach((trade: any) => {
-      const tradeTime = new Date(trade.placed_at ?? trade.filled_at ?? now).getTime();
-      const ageMs = now - tradeTime;
-      
-      // Exponential decay: weight = e^(-age / halfLife)
-      const decayFactor = Math.exp(-ageMs / halfLifeMs);
-      weightedTradeCount += decayFactor;
-      
-      // Track trade day (for frequency analysis)
-      const tradeDay = new Date(tradeTime).toISOString().slice(0, 10);
-      tradeDays.add(tradeDay);
-      
-      // Store timestamp for regularity calculation
-      tradeTimestamps.push(tradeTime);
-    });
-
-    // 1. WEIGHTED TRADE VOLUME (30 points, asymptotic - no hard cap)
-    // Uses logarithmic scaling to prevent hard cap but with diminishing returns
-    // log(1 + x) / log(1 + target) where target = 50 weighted trades
-    // This means: 50 weighted trades ≈ 30 points, 100 ≈ 37 points, 200 ≈ 44 points
-    const targetWeightedTrades = 50;
-    const volumeScore = Math.min(
-      (Math.log(1 + weightedTradeCount) / Math.log(1 + targetWeightedTrades)) * 30,
-      45 // Soft cap at 45 to leave room for other components
-    );
-
-    // 2. TRADING REGULARITY (40 points) - Punishes both overtrading AND undertrading
-    let regularityScore = 0;
-
-    if (tradeTimestamps.length >= 2) {
-      // Calculate time intervals between consecutive trades
-      const sortedTimestamps = [...tradeTimestamps].sort((a, b) => a - b);
-      const intervals: number[] = [];
-      
-      for (let i = 1; i < sortedTimestamps.length; i++) {
-        const intervalDays = (sortedTimestamps[i] - sortedTimestamps[i - 1]) / oneDayMs;
-        intervals.push(intervalDays);
+      // Small sample penalty: if max DD is tiny, it might just be luck
+      // Penalize perfect scores early on
+      let drawdownScore = rawDrawdownScore;
+      if (maxDrawdown < 2.0 && confidenceFactor < 0.5) {
+        // Less than 2% drawdown with < 2 weeks data = probably just lucky
+        drawdownScore = rawDrawdownScore * 0.6; // 40% penalty
       }
-      
-      // Calculate coefficient of variation (CV) of intervals
-      // CV = stddev / mean - measures consistency
-      // Low CV = consistent trading pattern (good)
-      // High CV = erratic trading (bad)
-      const meanInterval = intervals.reduce((sum, val) => sum + val, 0) / intervals.length;
-      const variance = intervals.reduce((sum, val) => sum + Math.pow(val - meanInterval, 2), 0) / intervals.length;
-      const stdDev = Math.sqrt(variance);
-      const coefficientOfVariation = meanInterval > 0 ? stdDev / meanInterval : 10;
-      
-      // OPTIMAL TRADING FREQUENCY: 2-5 trades per week (mean interval 1.4 - 3.5 days)
-      const optimalMinInterval = 1.4; // ~5 trades/week
-      const optimalMaxInterval = 3.5; // ~2 trades/week
-      
-      // Penalty for mean interval outside optimal range
-      let frequencyPenalty = 0;
-      if (meanInterval < optimalMinInterval) {
-        // Day trading penalty: exponential punishment for overtrading
-        frequencyPenalty = Math.pow((optimalMinInterval - meanInterval) / optimalMinInterval, 1.5) * 20;
-      } else if (meanInterval > optimalMaxInterval) {
-        // Inactivity penalty: exponential punishment for undertrading
-        frequencyPenalty = Math.pow((meanInterval - optimalMaxInterval) / optimalMaxInterval, 1.2) * 20;
+
+      // 3. VOLATILITY PENALTY (20 points max)
+      // Low volatility early on suggests few trades or small positions
+      const rawVolatilityScore = Math.max(0, 20 * Math.exp(-volatility / 20));
+
+      // Penalize artificially low volatility (< 15%) in early weeks
+      let volatilityScore = rawVolatilityScore;
+      if (volatility < 15 && confidenceFactor < 0.5) {
+        // Suspiciously low volatility = probably not enough trading
+        volatilityScore = rawVolatilityScore * 0.5; // 50% penalty
       }
-      
-      // Consistency score: penalize high CV (erratic trading)
-      // CV < 1.0 = excellent consistency
-      // CV > 2.0 = poor consistency
-      const consistencyPenalty = Math.min(coefficientOfVariation / 2.0, 1.0) * 15;
-      
-      // Calculate regularity score with penalties
-      regularityScore = Math.max(0, 40 - frequencyPenalty - consistencyPenalty);
-    } else if (tradeTimestamps.length === 1) {
-      // Single trade: moderate penalty for inactivity
-      regularityScore = 10;
-    } else {
-      // No trades: maximum penalty
-      regularityScore = 0;
-    }
 
-    // 3. DIVERSIFICATION (30 points, asymptotic - no hard cap)
-    // Similar logarithmic scaling: 15 symbols ≈ 30 points, 30 ≈ 37 points, 60 ≈ 44 points
-    const targetSymbols = 15;
-    const diversificationScore = Math.min(
-      (Math.log(1 + allTimeUniqueSymbols) / Math.log(1 + targetSymbols)) * 30,
-      45 // Soft cap
-    );
+      const riskScore = Math.max(
+        0,
+        Math.min(100, sharpeScore + drawdownScore + volatilityScore),
+      );
 
-    // TOTAL ACTIVITY SCORE (max theoretical ≈ 100, but soft-capped at ~115 for exceptional performance)
-    const activityScore = volumeScore + regularityScore + diversificationScore;
+      // CONSISTENCY SCORE: Positive return ratio + volatility penalty (with recency weighting)
+      const consistencyHalfLifeDays = 14; // 2-week half-life for consistency
+      const consistencyHalfLifeMs = consistencyHalfLifeDays * oneDayMs;
 
-      // Volatility penalty: 30% annualized vol = full penalty (more realistic than 100%)
+      let weightedPositiveDays = 0;
+      let totalWeight = 0;
+
+      snapshots.forEach((snapshot) => {
+        const snapshotTime = snapshot.timestamp.getTime();
+        const ageMs = now - snapshotTime;
+
+        // Exponential decay: recent days weighted more heavily
+        const decayFactor = Math.exp(-ageMs / consistencyHalfLifeMs);
+
+        totalWeight += decayFactor;
+
+        if (snapshot.dailyReturn > 0) {
+          weightedPositiveDays += decayFactor;
+        }
+      });
+
+      // CONSISTENCY SCORE calculation continues...
+      const weightedPositiveRatio =
+        totalWeight > 0 ? weightedPositiveDays / totalWeight : 0;
       const volatilityPenalty = Math.min(volatility / 30, 1.0);
-
       const consistencyScore = Math.max(
         0,
         Math.min(
@@ -964,13 +869,13 @@ export default function Dashboard() {
         ),
       );
 
-      // ACTIVITY SCORE: Time-decayed trades + diversification
-      // consts now & oneDayMs are both in the same place so no point duplicating
+      // ACTIVITY SCORE: Time-decayed trades + diversification + trading frequency regularity
       const halfLifeDays = 7; // Activity "half-life" of 7 days
       const halfLifeMs = halfLifeDays * oneDayMs;
 
       let weightedTradeCount = 0;
-      let recentTradeCount = 0;
+      const tradeDays = new Set<string>(); // Track unique trading days
+      const tradeTimestamps: number[] = [];
 
       // Calculate weighted trade count with exponential decay
       trades.forEach((trade: any) => {
@@ -980,29 +885,110 @@ export default function Dashboard() {
         const ageMs = now - tradeTime;
 
         // Exponential decay: weight = e^(-age / halfLife)
-        // After 7 days, a trade counts for ~50% of its original value
-        // After 14 days, ~25%, after 21 days, ~12.5%, etc.
         const decayFactor = Math.exp(-ageMs / halfLifeMs);
         weightedTradeCount += decayFactor;
 
-        // Count recent trades (last 7 days)
-        if (ageMs < 7 * oneDayMs) {
-          recentTradeCount++;
-        }
+        // Track trade day (for frequency analysis)
+        const tradeDay = new Date(tradeTime).toISOString().slice(0, 10);
+        tradeDays.add(tradeDay);
+
+        // Store timestamp for regularity calculation
+        tradeTimestamps.push(tradeTime);
       });
 
-      // Recent activity component: 10+ trades in last 7 days = max 30 points
-      const recentTradeScore = Math.min(recentTradeCount / 10, 1.0) * 30;
+      // 1. WEIGHTED TRADE VOLUME (30 points, asymptotic - no hard cap)
+      // Uses logarithmic scaling to prevent hard cap but with diminishing returns
+      // log(1 + x) / log(1 + target) where target = 50 weighted trades
+      // This means: 50 weighted trades ≈ 30 points, 100 ≈ 37 points, 200 ≈ 44 points
+      const targetWeightedTrades = 50;
+      const volumeScore = Math.min(
+        (Math.log(1 + weightedTradeCount) /
+          Math.log(1 + targetWeightedTrades)) *
+          30,
+        45, // Soft cap at 45 to leave room for other components
+      );
 
-      // Cumulative weighted component: 50 weighted trades = max 20 points
-      const cumulativeTradeScore = Math.min(weightedTradeCount / 50, 1.0) * 20;
+      // 2. TRADING REGULARITY (40 points) - Punishes both overtrading AND undertrading
+      let regularityScore = 0;
 
-      // Diversification: 15+ unique symbols EVER traded = max 50 points
-      const diversificationScore =
-        Math.min(allTimeUniqueSymbols / 15, 1.0) * 50;
+      if (tradeTimestamps.length >= 2) {
+        // Calculate time intervals between consecutive trades
+        const sortedTimestamps = [...tradeTimestamps].sort((a, b) => a - b);
+        const intervals: number[] = [];
 
+        for (let i = 1; i < sortedTimestamps.length; i++) {
+          const intervalDays =
+            (sortedTimestamps[i] - sortedTimestamps[i - 1]) / oneDayMs;
+          intervals.push(intervalDays);
+        }
+
+        // Calculate coefficient of variation (CV) of intervals
+        // CV = stddev / mean - measures consistency
+        // Low CV = consistent trading pattern (good)
+        // High CV = erratic trading (bad)
+        const meanInterval =
+          intervals.reduce((sum, val) => sum + val, 0) / intervals.length;
+        const variance =
+          intervals.reduce(
+            (sum, val) => sum + Math.pow(val - meanInterval, 2),
+            0,
+          ) / intervals.length;
+        const stdDev = Math.sqrt(variance);
+        const coefficientOfVariation =
+          meanInterval > 0 ? stdDev / meanInterval : 10;
+
+        // OPTIMAL TRADING FREQUENCY: 2-5 trades per week (mean interval 1.4 - 3.5 days)
+        const optimalMinInterval = 1.4; // ~5 trades/week
+        const optimalMaxInterval = 3.5; // ~2 trades/week
+
+        // Penalty for mean interval outside optimal range
+        let frequencyPenalty = 0;
+        if (meanInterval < optimalMinInterval) {
+          // Day trading penalty: exponential punishment for overtrading
+          frequencyPenalty =
+            Math.pow(
+              (optimalMinInterval - meanInterval) / optimalMinInterval,
+              1.5,
+            ) * 20;
+        } else if (meanInterval > optimalMaxInterval) {
+          // Inactivity penalty: exponential punishment for undertrading
+          frequencyPenalty =
+            Math.pow(
+              (meanInterval - optimalMaxInterval) / optimalMaxInterval,
+              1.2,
+            ) * 20;
+        }
+
+        // Consistency score: penalize high CV (erratic trading)
+        // CV < 1.0 = excellent consistency
+        // CV > 2.0 = poor consistency
+        const consistencyPenalty =
+          Math.min(coefficientOfVariation / 2.0, 1.0) * 15;
+
+        // Calculate regularity score with penalties
+        regularityScore = Math.max(
+          0,
+          40 - frequencyPenalty - consistencyPenalty,
+        );
+      } else if (tradeTimestamps.length === 1) {
+        // Single trade: moderate penalty for inactivity
+        regularityScore = 10;
+      } else {
+        // No trades: maximum penalty
+        regularityScore = 0;
+      }
+
+      // 3. DIVERSIFICATION (30 points, asymptotic - no hard cap)
+      // Similar logarithmic scaling: 15 symbols ≈ 30 points, 30 ≈ 37 points, 60 ≈ 44 points
+      const targetSymbols = 15;
+      const diversificationScore = Math.min(
+        (Math.log(1 + allTimeUniqueSymbols) / Math.log(1 + targetSymbols)) * 30,
+        45, // Soft cap
+      );
+
+      // TOTAL ACTIVITY SCORE (max theoretical ≈ 100, but soft-capped at ~115 for exceptional performance)
       const activityScore =
-        recentTradeScore + cumulativeTradeScore + diversificationScore;
+        volumeScore + regularityScore + diversificationScore;
 
       // TOTAL SCORE: Returns weighted at 50%
       const totalScore =
@@ -1197,7 +1183,9 @@ export default function Dashboard() {
 
         // Extract 10 most recent trades for display
         const sortedTrades = [...trades].sort(
-          (a, b) => new Date(b.placed_at ?? 0).getTime() - new Date(a.placed_at ?? 0).getTime()
+          (a, b) =>
+            new Date(b.placed_at ?? 0).getTime() -
+            new Date(a.placed_at ?? 0).getTime(),
         );
         setRecentTrades(sortedTrades.slice(0, 10));
 
@@ -2287,7 +2275,7 @@ export default function Dashboard() {
           {/* Recent Trades Section */}
           <div className="trading-stats-section">
             <h2>Recent Trades</h2>
-            
+
             {recentTrades.length > 0 ? (
               <div className="table-container">
                 <table className="positions-table">
@@ -2305,14 +2293,24 @@ export default function Dashboard() {
                     {recentTrades.map((trade, idx) => {
                       const side = (trade.side ?? "buy").toLowerCase();
                       const notional = Number(
-                        trade.notional ?? Number(trade.quantity ?? 0) * Number(trade.price ?? 0)
+                        trade.notional ??
+                          Number(trade.quantity ?? 0) *
+                            Number(trade.price ?? 0),
                       );
-                      const tradeDate = new Date(trade.placed_at ?? trade.filled_at ?? new Date());
-                      
+                      const tradeDate = new Date(
+                        trade.placed_at ?? trade.filled_at ?? new Date(),
+                      );
+
                       return (
                         <tr key={`${trade.id}-${idx}`}>
                           <td>
-                            <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                            <div
+                              style={{
+                                display: "flex",
+                                flexDirection: "column",
+                                gap: "4px",
+                              }}
+                            >
                               <span style={{ fontWeight: 600 }}>
                                 {tradeDate.toLocaleDateString("en-GB", {
                                   day: "2-digit",
@@ -2320,7 +2318,12 @@ export default function Dashboard() {
                                   year: "numeric",
                                 })}
                               </span>
-                              <span style={{ fontSize: "0.85rem", color: "#9aa3b2" }}>
+                              <span
+                                style={{
+                                  fontSize: "0.85rem",
+                                  color: "#9aa3b2",
+                                }}
+                              >
                                 {tradeDate.toLocaleTimeString("en-GB", {
                                   hour: "2-digit",
                                   minute: "2-digit",
@@ -2329,21 +2332,30 @@ export default function Dashboard() {
                             </div>
                           </td>
                           <td>
-                            <strong style={{ color: "#FFFFFF" }}>{trade.symbol}</strong>
+                            <strong style={{ color: "#FFFFFF" }}>
+                              {trade.symbol}
+                            </strong>
                           </td>
                           <td>
-                            <span className={`position-badge ${side === "buy" ? "long" : "short"}`}>
+                            <span
+                              className={`position-badge ${side === "buy" ? "long" : "short"}`}
+                            >
                               {side}
                             </span>
                           </td>
                           <td>
-                            {Number(trade.quantity ?? 0).toLocaleString("en-US", {
-                              minimumFractionDigits: 0,
-                              maximumFractionDigits: 2,
-                            })}
+                            {Number(trade.quantity ?? 0).toLocaleString(
+                              "en-US",
+                              {
+                                minimumFractionDigits: 0,
+                                maximumFractionDigits: 2,
+                              },
+                            )}
                           </td>
                           <td>{formatCurrency(Number(trade.price ?? 0))}</td>
-                          <td style={{ fontWeight: 600 }}>{formatCurrency(notional)}</td>
+                          <td style={{ fontWeight: 600 }}>
+                            {formatCurrency(notional)}
+                          </td>
                         </tr>
                       );
                     })}
