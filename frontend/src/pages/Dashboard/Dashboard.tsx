@@ -95,6 +95,20 @@ type CompetitionScore = {
   totalScore: number;
 };
 
+type NewsItem = {
+  title: string;
+  date: string;
+  summary: string;
+  link: string;
+};
+
+type NewsState = {
+  items: NewsItem[];
+  loading: boolean;
+  error: string | null;
+  ticker: string;
+};
+
 export default function Dashboard() {
   const [realizedPnLData, setRealizedPnLData] = useState<
     { date: string; pnl: number }[]
@@ -151,6 +165,12 @@ export default function Dashboard() {
   const [allocationData, setAllocationData] = useState<AllocationDataPoint[]>(
     [],
   );
+  const [newsState, setNewsState] = useState<NewsState>({
+    items: [],
+    loading: false,
+    error: null,
+    ticker: "",
+  });
 
   const handleLogout = async () => {
     try {
@@ -183,7 +203,7 @@ export default function Dashboard() {
         if (cashBalance < closingNotional) {
           alert(
             `Insufficient funds to close short position. Please close existing long positions to close this short.
-            \nYou need ${formatCurrency(closingNotional)} but only have ${formatCurrency(cashBalance)} available.`
+            \nYou need ${formatCurrency(closingNotional)} but only have ${formatCurrency(cashBalance)} available.`,
           );
           return;
         }
@@ -260,7 +280,7 @@ export default function Dashboard() {
           } else {
             // Covering a short
             position.quantity += quantity;
-            
+
             if (position.quantity === 0) {
               // Fully covered short
               position.costBasis = 0;
@@ -278,7 +298,7 @@ export default function Dashboard() {
           if (oldQuantity > 0) {
             // Reducing or closing long
             position.quantity -= quantity;
-            
+
             if (position.quantity === 0) {
               // Fully closed long
               position.costBasis = 0;
@@ -293,7 +313,7 @@ export default function Dashboard() {
           } else {
             // Opening or adding to short
             position.quantity -= quantity;
-            
+
             if (oldQuantity === 0) {
               // Opening new short position
               position.costBasis = Math.abs(position.quantity) * price;
@@ -302,16 +322,19 @@ export default function Dashboard() {
               const oldShortQty = Math.abs(oldQuantity);
               const newShortQty = quantity;
               const totalShortQty = Math.abs(position.quantity);
-              const oldAvgPrice = oldShortQty > 0 ? oldCostBasis / oldShortQty : 0;
-              const weightedAvgPrice = 
-                ((oldShortQty * oldAvgPrice) + (newShortQty * price)) / totalShortQty;
+              const oldAvgPrice =
+                oldShortQty > 0 ? oldCostBasis / oldShortQty : 0;
+              const weightedAvgPrice =
+                (oldShortQty * oldAvgPrice + newShortQty * price) /
+                totalShortQty;
               position.costBasis = totalShortQty * weightedAvgPrice;
             }
           }
         }
       });
 
-      const calculatedCashBalance = initialCapital - totalCostBasis + totalProceeds;
+      const calculatedCashBalance =
+        initialCapital - totalCostBasis + totalProceeds;
       setCashBalance(calculatedCashBalance);
 
       const aggregatedPositions = Array.from(positionsMap.values()).filter(
@@ -320,7 +343,8 @@ export default function Dashboard() {
 
       // Update positions with current prices
       const updatedPositions: Position[] = aggregatedPositions.map((pos) => {
-        const entryPrice = pos.quantity !== 0 ? pos.costBasis / Math.abs(pos.quantity) : 0;
+        const entryPrice =
+          pos.quantity !== 0 ? pos.costBasis / Math.abs(pos.quantity) : 0;
         const currentPrice = priceMap.get(pos.symbol) ?? entryPrice;
         const marketValue = pos.quantity * currentPrice;
 
@@ -384,6 +408,52 @@ export default function Dashboard() {
 
   const formatPercent = (value: number) =>
     `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
+
+  /**
+   * Fetch news from the news microservice API
+   * Fetches news for a given ticker symbol
+   */
+  const fetchNewsForTicker = useCallback(
+    async (ticker: string, count: number = 5) => {
+      if (!ticker || ticker.trim().length === 0) {
+        console.log("⏭️ Skipping news fetch - no ticker provided");
+        return;
+      }
+
+      setNewsState((prev) => ({ ...prev, loading: true, error: null }));
+
+      try {
+        const newsApiUrl = `http://localhost:8000/news?ticker=${ticker}&count=${count}`;
+        console.log(`🔄 Fetching news for ${ticker} from ${newsApiUrl}`);
+
+        const response = await fetch(newsApiUrl, {
+          signal: AbortSignal.timeout(10000),
+        });
+
+        if (!response.ok) {
+          throw new Error(`API returned status ${response.status}`);
+        }
+
+        const data = await response.json();
+        console.log(`📰 Fetched ${data.count} news items for ${ticker}`);
+
+        setNewsState({
+          items: data.items || [],
+          loading: false,
+          error: null,
+          ticker: ticker.toUpperCase(),
+        });
+      } catch (err: any) {
+        console.error(`❌ Failed to fetch news: ${err.message}`);
+        setNewsState((prev) => ({
+          ...prev,
+          loading: false,
+          error: `Failed to fetch news: ${err.message}`,
+        }));
+      }
+    },
+    [],
+  );
 
   /** Equity curve from trades only: sort by placed_at ASC, start at initial_capital, BUY -> equity -= notional, SELL -> equity += notional */
   const calculateEquityCurve = useCallback(
@@ -677,117 +747,125 @@ export default function Dashboard() {
   );
 
   const calculateCompetitionScore = useCallback(
-  (
-    totalReturn: number,
-    sharpe: number,
-    maxDrawdown: number,
-    volatility: number,
-    trades: any[], // ← CHANGED: Pass full trades array instead of totalTrades count
-    allTimeUniqueSymbols: number,
-    snapshots: PortfolioSnapshot[],
-  ): CompetitionScore => {
-    // RETURN SCORE: Asymmetric penalty for losses (losses hurt 3x more)
-    // Range: -16.67% return = 0, 0% = 50, +16.67% = 100
-    const returnScore =
-      totalReturn >= 0
-        ? Math.min(100, 50 + totalReturn * 3)
-        : Math.max(0, 50 + totalReturn * 9); // 9 = 3x penalty multiplier
+    (
+      totalReturn: number,
+      sharpe: number,
+      maxDrawdown: number,
+      volatility: number,
+      trades: any[], // ← CHANGED: Pass full trades array instead of totalTrades count
+      allTimeUniqueSymbols: number,
+      snapshots: PortfolioSnapshot[],
+    ): CompetitionScore => {
+      // RETURN SCORE: Asymmetric penalty for losses (losses hurt 3x more)
+      // Range: -16.67% return = 0, 0% = 50, +16.67% = 100
+      const returnScore =
+        totalReturn >= 0
+          ? Math.min(100, 50 + totalReturn * 3)
+          : Math.max(0, 50 + totalReturn * 9); // 9 = 3x penalty multiplier
 
-    // RISK SCORE: Sharpe ratio (70%) + drawdown management (30%)
-    // Sharpe component: 0-70 points (3.0+ Sharpe = max 70)
-    const sharpeScore = Math.min((Math.max(sharpe, 0) / 3.0) * 70, 70);
+      // RISK SCORE: Sharpe ratio (70%) + drawdown management (30%)
+      // Sharpe component: 0-70 points (3.0+ Sharpe = max 70)
+      const sharpeScore = Math.min((Math.max(sharpe, 0) / 3.0) * 70, 70);
 
-    // Drawdown component: 0-30 points (0% DD = 30, 50%+ DD = 0)
-    const drawdownScore = Math.max(0, 30 - maxDrawdown * 0.6);
+      // Drawdown component: 0-30 points (0% DD = 30, 50%+ DD = 0)
+      const drawdownScore = Math.max(0, 30 - maxDrawdown * 0.6);
 
-    const riskScore = Math.max(0, Math.min(100, sharpeScore + drawdownScore));
+      const riskScore = Math.max(0, Math.min(100, sharpeScore + drawdownScore));
 
-    // CONSISTENCY SCORE: Positive return ratio + volatility penalty (with recency weighting)
-    const now = Date.now();
-    const oneDayMs = 24 * 60 * 60 * 1000;
-    const consistencyHalfLifeDays = 14; // 2-week half-life for consistency
-    const consistencyHalfLifeMs = consistencyHalfLifeDays * oneDayMs;
+      // CONSISTENCY SCORE: Positive return ratio + volatility penalty (with recency weighting)
+      const now = Date.now();
+      const oneDayMs = 24 * 60 * 60 * 1000;
+      const consistencyHalfLifeDays = 14; // 2-week half-life for consistency
+      const consistencyHalfLifeMs = consistencyHalfLifeDays * oneDayMs;
 
-    let weightedPositiveDays = 0;
-    let totalWeight = 0;
+      let weightedPositiveDays = 0;
+      let totalWeight = 0;
 
-    snapshots.forEach((snapshot) => {
-      const snapshotTime = snapshot.timestamp.getTime();
-      const ageMs = now - snapshotTime;
-      
-      // Exponential decay: recent days weighted more heavily
-      const decayFactor = Math.exp(-ageMs / consistencyHalfLifeMs);
-      
-      totalWeight += decayFactor;
-      
-      if (snapshot.dailyReturn > 0) {
-        weightedPositiveDays += decayFactor;
-      }
-    });
+      snapshots.forEach((snapshot) => {
+        const snapshotTime = snapshot.timestamp.getTime();
+        const ageMs = now - snapshotTime;
 
-    // Weighted positive ratio - recent performance matters more
-    const weightedPositiveRatio = totalWeight > 0 ? weightedPositiveDays / totalWeight : 0;
+        // Exponential decay: recent days weighted more heavily
+        const decayFactor = Math.exp(-ageMs / consistencyHalfLifeMs);
 
-    // Volatility penalty: 30% annualized vol = full penalty (more realistic than 100%)
-    const volatilityPenalty = Math.min(volatility / 30, 1.0);
+        totalWeight += decayFactor;
 
-    const consistencyScore = Math.max(
-      0,
-      Math.min(100, weightedPositiveRatio * 60 + (1 - volatilityPenalty) * 40),
-    );
+        if (snapshot.dailyReturn > 0) {
+          weightedPositiveDays += decayFactor;
+        }
+      });
 
-    // ACTIVITY SCORE: Time-decayed trades + diversification
-    // consts now & oneDayMs are both in the same place so no point duplicating
-    const halfLifeDays = 7; // Activity "half-life" of 7 days
-    const halfLifeMs = halfLifeDays * oneDayMs;
+      // Weighted positive ratio - recent performance matters more
+      const weightedPositiveRatio =
+        totalWeight > 0 ? weightedPositiveDays / totalWeight : 0;
 
-    let weightedTradeCount = 0;
-    let recentTradeCount = 0;
+      // Volatility penalty: 30% annualized vol = full penalty (more realistic than 100%)
+      const volatilityPenalty = Math.min(volatility / 30, 1.0);
 
-    // Calculate weighted trade count with exponential decay
-    trades.forEach((trade: any) => {
-      const tradeTime = new Date(trade.placed_at ?? trade.filled_at ?? now).getTime();
-      const ageMs = now - tradeTime;
-      
-      // Exponential decay: weight = e^(-age / halfLife)
-      // After 7 days, a trade counts for ~50% of its original value
-      // After 14 days, ~25%, after 21 days, ~12.5%, etc.
-      const decayFactor = Math.exp(-ageMs / halfLifeMs);
-      weightedTradeCount += decayFactor;
-      
-      // Count recent trades (last 7 days)
-      if (ageMs < (7 * oneDayMs)) {
-        recentTradeCount++;
-      }
-    });
+      const consistencyScore = Math.max(
+        0,
+        Math.min(
+          100,
+          weightedPositiveRatio * 60 + (1 - volatilityPenalty) * 40,
+        ),
+      );
 
-    // Recent activity component: 10+ trades in last 7 days = max 30 points
-    const recentTradeScore = Math.min(recentTradeCount / 10, 1.0) * 30;
+      // ACTIVITY SCORE: Time-decayed trades + diversification
+      // consts now & oneDayMs are both in the same place so no point duplicating
+      const halfLifeDays = 7; // Activity "half-life" of 7 days
+      const halfLifeMs = halfLifeDays * oneDayMs;
 
-    // Cumulative weighted component: 50 weighted trades = max 20 points
-    const cumulativeTradeScore = Math.min(weightedTradeCount / 50, 1.0) * 20;
+      let weightedTradeCount = 0;
+      let recentTradeCount = 0;
 
-    // Diversification: 15+ unique symbols EVER traded = max 50 points
-    const diversificationScore = Math.min(allTimeUniqueSymbols / 15, 1.0) * 50;
+      // Calculate weighted trade count with exponential decay
+      trades.forEach((trade: any) => {
+        const tradeTime = new Date(
+          trade.placed_at ?? trade.filled_at ?? now,
+        ).getTime();
+        const ageMs = now - tradeTime;
 
-    const activityScore = recentTradeScore + cumulativeTradeScore + diversificationScore;
+        // Exponential decay: weight = e^(-age / halfLife)
+        // After 7 days, a trade counts for ~50% of its original value
+        // After 14 days, ~25%, after 21 days, ~12.5%, etc.
+        const decayFactor = Math.exp(-ageMs / halfLifeMs);
+        weightedTradeCount += decayFactor;
 
-    // TOTAL SCORE: Returns weighted at 50%
-    const totalScore =
-      returnScore * 0.5 +
-      riskScore * 0.25 +
-      consistencyScore * 0.15 +
-      activityScore * 0.1;
+        // Count recent trades (last 7 days)
+        if (ageMs < 7 * oneDayMs) {
+          recentTradeCount++;
+        }
+      });
 
-    return {
-      returnScore: Math.round(returnScore),
-      riskScore: Math.round(riskScore),
-      consistencyScore: Math.round(consistencyScore),
-      activityScore: Math.round(activityScore),
-      totalScore: Math.round(totalScore),
-    };
-  },
-  [],
+      // Recent activity component: 10+ trades in last 7 days = max 30 points
+      const recentTradeScore = Math.min(recentTradeCount / 10, 1.0) * 30;
+
+      // Cumulative weighted component: 50 weighted trades = max 20 points
+      const cumulativeTradeScore = Math.min(weightedTradeCount / 50, 1.0) * 20;
+
+      // Diversification: 15+ unique symbols EVER traded = max 50 points
+      const diversificationScore =
+        Math.min(allTimeUniqueSymbols / 15, 1.0) * 50;
+
+      const activityScore =
+        recentTradeScore + cumulativeTradeScore + diversificationScore;
+
+      // TOTAL SCORE: Returns weighted at 50%
+      const totalScore =
+        returnScore * 0.5 +
+        riskScore * 0.25 +
+        consistencyScore * 0.15 +
+        activityScore * 0.1;
+
+      return {
+        returnScore: Math.round(returnScore),
+        riskScore: Math.round(riskScore),
+        consistencyScore: Math.round(consistencyScore),
+        activityScore: Math.round(activityScore),
+        totalScore: Math.round(totalScore),
+      };
+    },
+    [],
   );
 
   // Sync portfolio to database and save HOURLY snapshot
@@ -1011,7 +1089,7 @@ export default function Dashboard() {
             } else {
               // Covering a short
               position.quantity += quantity;
-              
+
               if (position.quantity === 0) {
                 // Fully covered short
                 position.costBasis = 0;
@@ -1029,7 +1107,7 @@ export default function Dashboard() {
             if (oldQuantity > 0) {
               // Reducing or closing long
               position.quantity -= quantity;
-              
+
               if (position.quantity === 0) {
                 // Fully closed long
                 position.costBasis = 0;
@@ -1044,7 +1122,7 @@ export default function Dashboard() {
             } else {
               // Opening or adding to short
               position.quantity -= quantity;
-              
+
               if (oldQuantity === 0) {
                 // Opening new short position
                 position.costBasis = Math.abs(position.quantity) * price;
@@ -1053,16 +1131,19 @@ export default function Dashboard() {
                 const oldShortQty = Math.abs(oldQuantity);
                 const newShortQty = quantity;
                 const totalShortQty = Math.abs(position.quantity);
-                const oldAvgPrice = oldShortQty > 0 ? oldCostBasis / oldShortQty : 0;
-                const weightedAvgPrice = 
-                  ((oldShortQty * oldAvgPrice) + (newShortQty * price)) / totalShortQty;
+                const oldAvgPrice =
+                  oldShortQty > 0 ? oldCostBasis / oldShortQty : 0;
+                const weightedAvgPrice =
+                  (oldShortQty * oldAvgPrice + newShortQty * price) /
+                  totalShortQty;
                 position.costBasis = totalShortQty * weightedAvgPrice;
               }
             }
           }
         });
 
-        const calculatedCashBalance = initialCapital - totalCostBasis + totalProceeds;
+        const calculatedCashBalance =
+          initialCapital - totalCostBasis + totalProceeds;
         setEquityCurveData(calculateEquityCurve(trades, initialCapital));
 
         const aggregatedPositions = Array.from(positionsMap.values()).filter(
@@ -1078,7 +1159,8 @@ export default function Dashboard() {
           .select("symbol")
           .eq("profile_id", userId);
 
-        const watchlistSymbols = watchlistData?.map((item) => item.symbol) || [];
+        const watchlistSymbols =
+          watchlistData?.map((item) => item.symbol) || [];
         setWatchlist(watchlistSymbols);
 
         // Combine position symbols + watchlist symbols
@@ -1122,7 +1204,9 @@ export default function Dashboard() {
         const totalEquityCalculated = calculatedCashBalance + totalMarketValue;
         const totalPnLCalculated = totalEquityCalculated - initialCapital;
         const totalReturn =
-          initialCapital === 0 ? 0 : (totalPnLCalculated / initialCapital) * 100;
+          initialCapital === 0
+            ? 0
+            : (totalPnLCalculated / initialCapital) * 100;
 
         setSummary({
           totalValue: totalEquityCalculated,
@@ -1152,7 +1236,9 @@ export default function Dashboard() {
         const totalNotional = trades.reduce(
           (sum: number, t: any) =>
             sum +
-            Number(t.notional ?? Number(t.quantity ?? 0) * Number(t.price ?? 0)),
+            Number(
+              t.notional ?? Number(t.quantity ?? 0) * Number(t.price ?? 0),
+            ),
           0,
         );
         const averageTradeSize =
@@ -1176,7 +1262,11 @@ export default function Dashboard() {
         });
 
         const now = new Date();
-        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const today = new Date(
+          now.getFullYear(),
+          now.getMonth(),
+          now.getDate(),
+        );
         const weekAgo = new Date(today);
         weekAgo.setDate(weekAgo.getDate() - 7);
 
@@ -1202,6 +1292,23 @@ export default function Dashboard() {
           tradesThisWeek,
           totalNotional,
         });
+
+        // Fetch news for the most traded stock if available
+        if (mostTradedStock && mostTradedStock !== "-") {
+          console.log(
+            `📰 Fetching news for most traded stock: ${mostTradedStock}`,
+          );
+          fetchNewsForTicker(mostTradedStock, 5);
+        } else {
+          // Fallback: fetch news for the first position if available
+          const firstPosition = aggregatedPositions[0];
+          if (firstPosition) {
+            console.log(
+              `📰 No most traded stock, fetching news for first position: ${firstPosition.symbol}`,
+            );
+            fetchNewsForTicker(firstPosition.symbol, 5);
+          }
+        }
 
         console.log("🔄 Fetching initial prices (non-blocking)...");
         if (symbols.length > 0) {
@@ -1238,10 +1345,13 @@ export default function Dashboard() {
               updatedTotalMarketValue += pos.marketValue;
             });
 
-            const updatedTotalEquity = calculatedCashBalance + updatedTotalMarketValue;
+            const updatedTotalEquity =
+              calculatedCashBalance + updatedTotalMarketValue;
             const updatedTotalPnLCalc = updatedTotalEquity - initialCapital;
             const updatedTotalReturn =
-              initialCapital === 0 ? 0 : (updatedTotalPnLCalc / initialCapital) * 100;
+              initialCapital === 0
+                ? 0
+                : (updatedTotalPnLCalc / initialCapital) * 100;
 
             setSummary({
               totalValue: updatedTotalEquity,
@@ -1382,10 +1492,10 @@ export default function Dashboard() {
         .order("placed_at", { ascending: true });
 
       const trades = tradesData ?? [];
-      
+
       // Calculate unique symbols traded
       const uniqueSymbols = new Set(
-        trades.map((t: any) => (t.symbol ?? "").toUpperCase().trim())
+        trades.map((t: any) => (t.symbol ?? "").toUpperCase().trim()),
       ).size;
 
       const score = calculateCompetitionScore(
@@ -1763,8 +1873,50 @@ export default function Dashboard() {
 
             <div className="chart-row">
               <div className="chart-container">
-                <h2>News Feed</h2>
-                <div className="chart-empty">Coming Soon!</div>
+                <h2>
+                  News Feed
+                  {newsState.ticker && ` (${newsState.ticker})`}
+                </h2>
+                {newsState.loading ? (
+                  <div className="chart-empty">Loading news...</div>
+                ) : newsState.error ? (
+                  <div className="chart-empty" style={{ color: "#ef4444" }}>
+                    {newsState.error}
+                  </div>
+                ) : newsState.items.length > 0 ? (
+                  <div className="news-feed-container">
+                    {newsState.items.map((item, index) => (
+                      <div key={index} className="news-item">
+                        <div className="news-header">
+                          <h4 className="news-title">{item.title}</h4>
+                          <span className="news-date">
+                            {new Date(item.date).toLocaleDateString("en-GB", {
+                              month: "short",
+                              day: "numeric",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                          </span>
+                        </div>
+                        {item.summary && item.summary !== " " && (
+                          <p className="news-summary">{item.summary}</p>
+                        )}
+                        {item.link && item.link !== " " && (
+                          <a
+                            href={item.link}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="news-link"
+                          >
+                            Read More →
+                          </a>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="chart-empty">No news available</div>
+                )}
               </div>
               <div className="chart-container">
                 <h2>Position Allocation</h2>
