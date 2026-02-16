@@ -45,6 +45,12 @@ body {
   padding: 2rem 1.25rem;
 }
 
+@media (max-width: 640px) {
+  .main {
+    padding: 1rem 0.75rem;
+  }
+}
+
 /* HEADER - DARKER EU BLUE THEME (like main website) */
 .header {
   position: sticky;
@@ -61,18 +67,34 @@ body {
   align-items: center;
   justify-content: space-between;
   width: 100%;  /* Full width, not max-width! */
-  padding: 0.8rem 0;  /* Remove horizontal padding */
+  padding: 0.8rem 1rem;  /* Responsive padding */
   position: relative;  /* For absolute positioned nav-links */
 }
 
+@media (max-width: 640px) {
+  .nav-container {
+    padding: 0.6rem 0.75rem;
+  }
+}
+
 .brand {
-  padding-left: 32px;  /* Push logo from edge */
+  padding-left: 0;  /* Remove fixed padding */
   flex: 0 0 auto;
 }
 
 .header-score-container {
-  padding-right: 32px;  /* Push score from edge */
+  padding-right: 0;  /* Remove fixed padding */
   flex: 0 0 auto;
+}
+
+@media (max-width: 640px) {
+  .brand {
+    padding-left: 0;
+  }
+
+  .header-score-container {
+    padding-right: 0;
+  }
 }
 
 .logo {
@@ -82,6 +104,12 @@ body {
   /* Remove the invert filter to keep yellow stars */
   filter: brightness(1.1) contrast(1.05);
   border-radius: 6px;
+}
+
+@media (max-width: 640px) {
+  .logo {
+    height: 45px;
+  }
 }
 
 .brand-text {
@@ -96,6 +124,18 @@ body {
 .nav-links {
   display: flex;
   gap: 1.75rem;
+}
+
+@media (max-width: 820px) {
+  .nav-links {
+    gap: 1rem;
+    padding: 0.75rem 1rem !important;
+    right: 0.75rem !important;
+  }
+
+  .nav-link {
+    font-size: 0.95rem;
+  }
 }
 
 .nav-link {
@@ -185,14 +225,15 @@ body {
   .nav-links {
     position: absolute;
     top: 70px;
-    right: 1rem;
+    right: 0.75rem;
     flex-direction: column;
     background: #0c0f14;
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 12px;
-    padding: 1rem 1.25rem;
+    padding: 0.75rem 1rem;
     display: none;
     box-shadow: 0 5px 15px rgba(0, 0, 0, 0.35);
+    z-index: 1000;
   }
 
   .nav-links.active {
@@ -201,7 +242,7 @@ body {
 
   .nav-link {
     padding: 0.5rem 0;
-    font-size: 1.05rem;
+    font-size: 0.95rem;
   }
 
   .logout-button {
@@ -209,6 +250,17 @@ body {
     margin-top: 0.5rem;
     width: 100%;
     text-align: center;
+  }
+}
+
+@media (max-width: 640px) {
+  .nav-links {
+    right: 0.5rem;
+    padding: 0.5rem 0.75rem;
+  }
+
+  .nav-link {
+    font-size: 0.9rem;
   }
 }
 
