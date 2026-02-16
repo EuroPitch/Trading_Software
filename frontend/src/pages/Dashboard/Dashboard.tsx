@@ -424,7 +424,7 @@ export default function Dashboard() {
       setNewsState((prev) => ({ ...prev, loading: true, error: null }));
 
       try {
-        const newsApiUrl = `http://localhost:8000/news?ticker=${ticker}&count=${count}`;
+        const newsApiUrl = `https://europitch-news.vercel.app/news?ticker=${ticker}&count=${count}`;
         console.log(`🔄 Fetching news for ${ticker} from ${newsApiUrl}`);
 
         const response = await fetch(newsApiUrl, {
