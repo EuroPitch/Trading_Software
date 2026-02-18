@@ -838,36 +838,142 @@ export default function Dashboard() {
         Math.min(100, sharpeScore + drawdownScore + volatilityScore),
       );
 
-      // CONSISTENCY SCORE: Positive return ratio + volatility penalty (with recency weighting)
-      const consistencyHalfLifeDays = 14; // 2-week half-life for consistency
-      const consistencyHalfLifeMs = consistencyHalfLifeDays * oneDayMs;
+      // CONSISTENCY SCORE: Measures sustained green performance & sustainable growth
+      // 1. Daily win rate (40 pts) — aggregate hourly snapshots into actual daily returns
+      // 2. Equity curve smoothness / R² (35 pts) — how linear & steady is the growth
+      // 3. No big single-day drops (25 pts) — penalize large drawdown days
 
-      let weightedPositiveDays = 0;
-      let totalWeight = 0;
-
+      // Step 1: Aggregate hourly snapshots into daily returns
+      const dailyEquityMap = new Map<
+        string,
+        { first: number; last: number; firstTime: number; lastTime: number }
+      >();
       snapshots.forEach((snapshot) => {
-        const snapshotTime = snapshot.timestamp.getTime();
-        const ageMs = now - snapshotTime;
-
-        // Exponential decay: recent days weighted more heavily
-        const decayFactor = Math.exp(-ageMs / consistencyHalfLifeMs);
-
-        totalWeight += decayFactor;
-
-        if (snapshot.dailyReturn > 0) {
-          weightedPositiveDays += decayFactor;
+        const dayKey = snapshot.timestamp.toISOString().slice(0, 10);
+        const existing = dailyEquityMap.get(dayKey);
+        const time = snapshot.timestamp.getTime();
+        if (!existing) {
+          dailyEquityMap.set(dayKey, {
+            first: snapshot.totalEquity,
+            last: snapshot.totalEquity,
+            firstTime: time,
+            lastTime: time,
+          });
+        } else {
+          if (time < existing.firstTime) {
+            existing.first = snapshot.totalEquity;
+            existing.firstTime = time;
+          }
+          if (time > existing.lastTime) {
+            existing.last = snapshot.totalEquity;
+            existing.lastTime = time;
+          }
         }
       });
 
-      // CONSISTENCY SCORE calculation continues...
-      const weightedPositiveRatio =
-        totalWeight > 0 ? weightedPositiveDays / totalWeight : 0;
-      const volatilityPenalty = Math.min(volatility / 30, 1.0);
+      const sortedDays = [...dailyEquityMap.entries()].sort((a, b) =>
+        a[0].localeCompare(b[0]),
+      );
+      const dailyReturns: number[] = [];
+      const dailyEquities: number[] = [];
+
+      for (let i = 0; i < sortedDays.length; i++) {
+        const [, day] = sortedDays[i];
+        dailyEquities.push(day.last);
+        if (i === 0) {
+          // First day: return from open to close
+          const ret =
+            day.first > 0 ? ((day.last - day.first) / day.first) * 100 : 0;
+          dailyReturns.push(ret);
+        } else {
+          const prevClose = sortedDays[i - 1][1].last;
+          const ret =
+            prevClose > 0 ? ((day.last - prevClose) / prevClose) * 100 : 0;
+          dailyReturns.push(ret);
+        }
+      }
+
+      // COMPONENT 1: Daily Win Rate (40 points)
+      // What fraction of trading days ended green?
+      const greenDays = dailyReturns.filter((r) => r > 0).length;
+      const totalDays = dailyReturns.length;
+      const dailyWinRate = totalDays > 0 ? greenDays / totalDays : 0;
+      // Scale: 30% win rate = 0 pts, 50% = 20 pts, 70%+ = 40 pts
+      const winRateScore = Math.max(
+        0,
+        Math.min(40, ((dailyWinRate - 0.3) / 0.4) * 40),
+      );
+
+      // COMPONENT 2: Equity Curve Smoothness — R² (15 points)
+      // R² measures how well the equity curve fits a straight line
+      // R² = 1.0 means perfectly linear growth (ideal)
+      // R² = 0.0 means random noise (terrible)
+      let rSquared = 0;
+      if (dailyEquities.length >= 3) {
+        const n = dailyEquities.length;
+        const xMean = (n - 1) / 2;
+        const yMean = dailyEquities.reduce((sum, v) => sum + v, 0) / n;
+
+        let ssTotal = 0;
+        let ssResidual = 0;
+        let sxy = 0;
+        let sxx = 0;
+
+        for (let i = 0; i < n; i++) {
+          sxy += (i - xMean) * (dailyEquities[i] - yMean);
+          sxx += (i - xMean) * (i - xMean);
+          ssTotal += (dailyEquities[i] - yMean) * (dailyEquities[i] - yMean);
+        }
+
+        const slope = sxx > 0 ? sxy / sxx : 0;
+        const intercept = yMean - slope * xMean;
+
+        for (let i = 0; i < n; i++) {
+          const predicted = intercept + slope * i;
+          ssResidual +=
+            (dailyEquities[i] - predicted) * (dailyEquities[i] - predicted);
+        }
+
+        rSquared = ssTotal > 0 ? Math.max(0, 1 - ssResidual / ssTotal) : 0;
+
+        // Only reward R² if the slope is positive (growing, not consistently losing)
+        if (slope <= 0) {
+          rSquared = rSquared * 0.2; // Heavy discount for consistent losses
+        }
+      }
+      const smoothnessScore = rSquared * 15;
+
+      // COMPONENT 3: No Big Drop Days (25 points)
+      // Penalize days with large negative returns — sustainable growth means no blowups
+      let bigDropPenalty = 0;
+      dailyReturns.forEach((ret) => {
+        if (ret < -3) {
+          // Each day worse than -3% adds penalty, exponentially for bigger drops
+          bigDropPenalty += Math.pow(Math.abs(ret) - 3, 1.5) * 3;
+        }
+      });
+      const noDropScore = Math.max(0, 25 - bigDropPenalty);
+
+      // COMPONENT 4: Green Streak Bonus (20 points)
+      // Reward consecutive green days — sustained momentum shows real consistency
+      let currentStreak = 0;
+      let longestStreak = 0;
+      dailyReturns.forEach((ret) => {
+        if (ret > 0) {
+          currentStreak++;
+          longestStreak = Math.max(longestStreak, currentStreak);
+        } else {
+          currentStreak = 0;
+        }
+      });
+      // 2 consecutive green days = 10 pts, 3 = 15 pts, 4+ = 20 pts
+      const streakScore = Math.min(20, (longestStreak / 4) * 20);
+
       const consistencyScore = Math.max(
         0,
         Math.min(
           100,
-          weightedPositiveRatio * 60 + (1 - volatilityPenalty) * 40,
+          winRateScore + smoothnessScore + noDropScore + streakScore,
         ),
       );
 
