@@ -977,126 +977,103 @@ export default function Dashboard() {
         ),
       );
 
-      // ACTIVITY SCORE: Time-decayed trades + diversification + trading frequency regularity
-      const halfLifeDays = 7; // Activity "half-life" of 7 days
-      const halfLifeMs = halfLifeDays * oneDayMs;
+      // ACTIVITY SCORE: Portfolio management behaviour
+      // Measures whether you're acting like a portfolio manager, not a day trader
+      // 1. Portfolio Breadth (35 pts) — diversified holdings across symbols
+      // 2. Engagement Regularity (35 pts) — active on multiple trading days, spread out
+      // 3. Rebalancing Behaviour (30 pts) — buying AND selling, adjusting positions
 
-      let weightedTradeCount = 0;
-      const tradeDays = new Set<string>(); // Track unique trading days
-      const tradeTimestamps: number[] = [];
+      const tradeDays = new Set<string>();
+      const symbolsBought = new Set<string>();
+      const symbolsSold = new Set<string>();
+      const tradesByDay = new Map<string, number>();
 
-      // Calculate weighted trade count with exponential decay
       trades.forEach((trade: any) => {
         const tradeTime = new Date(
           trade.placed_at ?? trade.filled_at ?? now,
         ).getTime();
-        const ageMs = now - tradeTime;
-
-        // Exponential decay: weight = e^(-age / halfLife)
-        const decayFactor = Math.exp(-ageMs / halfLifeMs);
-        weightedTradeCount += decayFactor;
-
-        // Track trade day (for frequency analysis)
         const tradeDay = new Date(tradeTime).toISOString().slice(0, 10);
         tradeDays.add(tradeDay);
+        tradesByDay.set(tradeDay, (tradesByDay.get(tradeDay) ?? 0) + 1);
 
-        // Store timestamp for regularity calculation
-        tradeTimestamps.push(tradeTime);
+        const symbol = (trade.symbol ?? "").toUpperCase().trim();
+        const side = (trade.side ?? "buy").toLowerCase();
+        if (side === "buy") {
+          symbolsBought.add(symbol);
+        } else {
+          symbolsSold.add(symbol);
+        }
       });
 
-      // 1. WEIGHTED TRADE VOLUME (30 points, asymptotic - no hard cap)
-      // Uses logarithmic scaling to prevent hard cap but with diminishing returns
-      // log(1 + x) / log(1 + target) where target = 50 weighted trades
-      // This means: 50 weighted trades ≈ 30 points, 100 ≈ 37 points, 200 ≈ 44 points
-      const targetWeightedTrades = 50;
-      const volumeScore = Math.min(
-        (Math.log(1 + weightedTradeCount) /
-          Math.log(1 + targetWeightedTrades)) *
-          30,
-        45, // Soft cap at 45 to leave room for other components
+      // 1. PORTFOLIO BREADTH (35 points)
+      // How many unique symbols have you traded? A PM builds a diversified portfolio.
+      // 5 symbols = 17.5 pts, 8 symbols = 28 pts, 10+ symbols = 35 pts
+      const targetSymbols = 10;
+      const breadthScore = Math.min(
+        35,
+        (allTimeUniqueSymbols / targetSymbols) * 35,
       );
 
-      // 2. TRADING REGULARITY (40 points) - Punishes both overtrading AND undertrading
-      let regularityScore = 0;
+      // 2. ENGAGEMENT REGULARITY (35 points)
+      // What fraction of available trading days have you been active?
+      // A PM checks in and manages regularly, not just once then forgets.
+      const competitionStartDate = new Date("2026-02-02");
+      const daysSinceStart = Math.max(
+        1,
+        Math.floor((now - competitionStartDate.getTime()) / oneDayMs),
+      );
+      // Approximate trading days (exclude weekends: ~5/7 of calendar days)
+      const approxTradingDays = Math.max(
+        1,
+        Math.floor(daysSinceStart * (5 / 7)),
+      );
+      const activeDayRatio = Math.min(1, tradeDays.size / approxTradingDays);
+      // Scale: 30% of days active = 0 pts, 60% = 17.5 pts, 90%+ = 35 pts
+      const engagementScore = Math.max(
+        0,
+        Math.min(35, ((activeDayRatio - 0.3) / 0.6) * 35),
+      );
 
-      if (tradeTimestamps.length >= 2) {
-        // Calculate time intervals between consecutive trades
-        const sortedTimestamps = [...tradeTimestamps].sort((a, b) => a - b);
-        const intervals: number[] = [];
+      // 3. REBALANCING BEHAVIOUR (30 points)
+      // A PM doesn't just buy — they trim winners, cut losers, and rebalance.
+      // Reward both buying AND selling, and selling multiple symbols.
 
-        for (let i = 1; i < sortedTimestamps.length; i++) {
-          const intervalDays =
-            (sortedTimestamps[i] - sortedTimestamps[i - 1]) / oneDayMs;
-          intervals.push(intervalDays);
+      // a) Buy/sell balance (15 pts): Do you have both buys and sells?
+      const totalTrades = trades.length;
+      const sellTrades = trades.filter(
+        (t: any) => (t.side ?? "buy").toLowerCase() === "sell",
+      ).length;
+      const buyTrades = totalTrades - sellTrades;
+      // Ideal ratio: 30-70% sells (meaning you're trimming/rebalancing, not just buying)
+      let buySellScore = 0;
+      if (totalTrades > 0 && sellTrades > 0) {
+        const sellRatio = sellTrades / totalTrades;
+        if (sellRatio >= 0.15 && sellRatio <= 0.7) {
+          // Sweet spot: active rebalancing
+          buySellScore = 15;
+        } else if (sellRatio < 0.15) {
+          // Barely selling — mostly buy and hold
+          buySellScore = (sellRatio / 0.15) * 10;
+        } else {
+          // Too much selling — liquidating, not managing
+          buySellScore = Math.max(0, 15 - ((sellRatio - 0.7) / 0.3) * 15);
         }
-
-        // Calculate coefficient of variation (CV) of intervals
-        // CV = stddev / mean - measures consistency
-        // Low CV = consistent trading pattern (good)
-        // High CV = erratic trading (bad)
-        const meanInterval =
-          intervals.reduce((sum, val) => sum + val, 0) / intervals.length;
-        const variance =
-          intervals.reduce(
-            (sum, val) => sum + Math.pow(val - meanInterval, 2),
-            0,
-          ) / intervals.length;
-        const stdDev = Math.sqrt(variance);
-        const coefficientOfVariation =
-          meanInterval > 0 ? stdDev / meanInterval : 10;
-
-        // OPTIMAL TRADING FREQUENCY: 2-5 trades per week (mean interval 1.4 - 3.5 days)
-        const optimalMinInterval = 1.4; // ~5 trades/week
-        const optimalMaxInterval = 3.5; // ~2 trades/week
-
-        // Penalty for mean interval outside optimal range
-        let frequencyPenalty = 0;
-        if (meanInterval < optimalMinInterval) {
-          // Day trading penalty: exponential punishment for overtrading
-          frequencyPenalty =
-            Math.pow(
-              (optimalMinInterval - meanInterval) / optimalMinInterval,
-              1.5,
-            ) * 20;
-        } else if (meanInterval > optimalMaxInterval) {
-          // Inactivity penalty: exponential punishment for undertrading
-          frequencyPenalty =
-            Math.pow(
-              (meanInterval - optimalMaxInterval) / optimalMaxInterval,
-              1.2,
-            ) * 20;
-        }
-
-        // Consistency score: penalize high CV (erratic trading)
-        // CV < 1.0 = excellent consistency
-        // CV > 2.0 = poor consistency
-        const consistencyPenalty =
-          Math.min(coefficientOfVariation / 2.0, 1.0) * 15;
-
-        // Calculate regularity score with penalties
-        regularityScore = Math.max(
-          0,
-          40 - frequencyPenalty - consistencyPenalty,
-        );
-      } else if (tradeTimestamps.length === 1) {
-        // Single trade: moderate penalty for inactivity
-        regularityScore = 10;
-      } else {
-        // No trades: maximum penalty
-        regularityScore = 0;
+      } else if (totalTrades > 0 && sellTrades === 0) {
+        // Only buying, no rebalancing at all
+        buySellScore = 3;
       }
 
-      // 3. DIVERSIFICATION (30 points, asymptotic - no hard cap)
-      // Similar logarithmic scaling: 15 symbols ≈ 30 points, 30 ≈ 37 points, 60 ≈ 44 points
-      const targetSymbols = 15;
-      const diversificationScore = Math.min(
-        (Math.log(1 + allTimeUniqueSymbols) / Math.log(1 + targetSymbols)) * 30,
-        45, // Soft cap
-      );
+      // b) Sell diversity (15 pts): Are you trimming across multiple positions?
+      // Selling 1 symbol = 5 pts, 3 symbols = 15 pts
+      const sellDiversityScore = Math.min(15, (symbolsSold.size / 3) * 15);
 
-      // TOTAL ACTIVITY SCORE (max theoretical ≈ 100, but soft-capped at ~115 for exceptional performance)
-      const activityScore =
-        volumeScore + regularityScore + diversificationScore;
+      const rebalancingScore = buySellScore + sellDiversityScore;
+
+      // TOTAL ACTIVITY SCORE
+      const activityScore = Math.min(
+        100,
+        breadthScore + engagementScore + rebalancingScore,
+      );
 
       // TOTAL SCORE: Returns weighted at 50%
       const totalScore =
