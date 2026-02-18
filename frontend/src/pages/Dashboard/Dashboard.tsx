@@ -770,13 +770,13 @@ export default function Dashboard() {
 
       // Calculate data reliability factor based on sample size
       const snapshotCount = snapshots.length;
-      const minSignificantSamples = 168; // 1 week of hourly data
-      const highConfidenceSamples = 672; // 4 weeks of hourly data
+      const minSignificantSamples = 120; // ~3.5 days of hourly data
+      const highConfidenceSamples = 504; // 3 weeks of hourly data
 
       // Confidence factor: 0-1 based on data points
-      // Less than 1 week = 0-0.3 confidence
-      // 1-4 weeks = 0.3-0.8 confidence
-      // 4+ weeks = 0.8-1.0 confidence
+      // Less than ~3.5 days = 0-0.3 confidence
+      // 3.5 days - 3 weeks = 0.3-0.8 confidence
+      // 3+ weeks = 0.8-1.0 confidence
       let confidenceFactor = 0;
       if (snapshotCount < minSignificantSamples) {
         confidenceFactor =
@@ -805,30 +805,32 @@ export default function Dashboard() {
         50,
       );
 
-      // Apply confidence penalty - early high Sharpes get heavily discounted
-      const sharpeScore = rawSharpeScore * (0.3 + 0.7 * confidenceFactor);
+      // Apply confidence penalty - early high Sharpes get discounted
+      // Floor at 0.75 — competition is 7 weeks, no need to over-suppress mid-comp
+      const sharpeScore = rawSharpeScore * (0.75 + 0.25 * confidenceFactor);
 
       // 2. DRAWDOWN COMPONENT (30 points max)
       // Exponential penalty for drawdowns
       const rawDrawdownScore = Math.max(0, 30 * Math.exp(-maxDrawdown / 15));
 
       // Small sample penalty: if max DD is tiny, it might just be luck
-      // Penalize perfect scores early on
+      // Only apply a mild penalty — genuinely low drawdown should still be rewarded
       let drawdownScore = rawDrawdownScore;
-      if (maxDrawdown < 2.0 && confidenceFactor < 0.5) {
-        // Less than 2% drawdown with < 2 weeks data = probably just lucky
-        drawdownScore = rawDrawdownScore * 0.6; // 40% penalty
+      if (maxDrawdown < 1.0 && confidenceFactor < 0.3) {
+        // Near-zero drawdown with < 1 week data = likely not tested yet
+        drawdownScore = rawDrawdownScore * 0.85; // 15% penalty
       }
 
       // 3. VOLATILITY PENALTY (20 points max)
       // Low volatility early on suggests few trades or small positions
       const rawVolatilityScore = Math.max(0, 20 * Math.exp(-volatility / 20));
 
-      // Penalize artificially low volatility (< 15%) in early weeks
+      // Penalize artificially low volatility only in very early stages
+      // 10%+ vol is legitimate portfolio risk, not suspicious
       let volatilityScore = rawVolatilityScore;
-      if (volatility < 15 && confidenceFactor < 0.5) {
-        // Suspiciously low volatility = probably not enough trading
-        volatilityScore = rawVolatilityScore * 0.5; // 50% penalty
+      if (volatility < 5 && confidenceFactor < 0.3) {
+        // Near-zero volatility with < 1 week data = barely trading
+        volatilityScore = rawVolatilityScore * 0.7; // 30% penalty
       }
 
       const riskScore = Math.max(
