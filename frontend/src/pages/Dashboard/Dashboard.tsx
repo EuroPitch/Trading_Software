@@ -696,11 +696,28 @@ export default function Dashboard() {
       // Sharpe Ratio - HOURLY calculation (252 trading days * 6.5 hours = ~1638 trading hours/year)
       const tradingHoursPerYear: number = 252 * 6.5;
       const hourlyRiskFreeRate: number = 0.04 / tradingHoursPerYear; // 4% annual risk-free rate
-      const sharpe =
-        stdDev === 0
-          ? 0
-          : ((meanReturn - hourlyRiskFreeRate) / stdDev) *
-            Math.sqrt(tradingHoursPerYear);
+
+      // Filter out near-zero returns (cash-sitting periods) to prevent Sharpe inflation
+      const significantReturns = returns.filter((r) => Math.abs(r) > 1e-8);
+      const nonZeroRatio =
+        returns.length > 0 ? significantReturns.length / returns.length : 0;
+
+      // Require at least 20% of snapshots to have meaningful returns
+      // Otherwise the portfolio is mostly cash and Sharpe is meaningless
+      let sharpe = 0;
+      if (stdDev > 1e-8 && nonZeroRatio >= 0.2) {
+        sharpe =
+          ((meanReturn - hourlyRiskFreeRate) / stdDev) *
+          Math.sqrt(tradingHoursPerYear);
+      } else if (stdDev > 1e-8) {
+        // Some activity but mostly cash — heavily discount the Sharpe
+        sharpe =
+          ((meanReturn - hourlyRiskFreeRate) / stdDev) *
+          Math.sqrt(tradingHoursPerYear) *
+          nonZeroRatio; // Scale down by how much of the period was actually invested
+      }
+      // Cap Sharpe at reasonable bounds to prevent anomalies
+      sharpe = Math.max(-10, Math.min(10, sharpe));
 
       // Annualized volatility - HOURLY calculation
       const annualizedVol = stdDev * Math.sqrt(tradingHoursPerYear) * 100;
