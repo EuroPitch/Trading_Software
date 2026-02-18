@@ -759,24 +759,24 @@ export default function Dashboard() {
     ): CompetitionScore => {
       const now = Date.now();
       const oneDayMs = 24 * 60 * 60 * 1000;
-      // RETURN SCORE: Asymmetric penalty for losses (losses hurt 3x more)
-      // Range: -16.67% return = 0, 0% = 50, +16.67% = 100
+      // RETURN SCORE: Asymmetric penalty for losses (losses hurt 2x more)
+      // Range: -8.33% return = 0, 0% = 50, +16.67% = 100
       const returnScore =
         totalReturn >= 0
           ? Math.min(100, 50 + totalReturn * 3)
-          : Math.max(0, 50 + totalReturn * 9); // 9 = 3x penalty multiplier
+          : Math.max(0, 50 + totalReturn * 6); // 6 = 2x penalty multiplier
 
       // RISK SCORE: Sharpe ratio (50%) + drawdown management (30%) + volatility penalty (20%)
 
       // Calculate data reliability factor based on sample size
       const snapshotCount = snapshots.length;
-      const minSignificantSamples = 168; // 1 week of hourly data
-      const highConfidenceSamples = 672; // 4 weeks of hourly data
+      const minSignificantSamples = 120; // ~3.5 days of hourly data
+      const highConfidenceSamples = 504; // 3 weeks of hourly data
 
       // Confidence factor: 0-1 based on data points
-      // Less than 1 week = 0-0.3 confidence
-      // 1-4 weeks = 0.3-0.8 confidence
-      // 4+ weeks = 0.8-1.0 confidence
+      // Less than ~3.5 days = 0-0.3 confidence
+      // 3.5 days - 3 weeks = 0.3-0.8 confidence
+      // 3+ weeks = 0.8-1.0 confidence
       let confidenceFactor = 0;
       if (snapshotCount < minSignificantSamples) {
         confidenceFactor =
@@ -805,30 +805,32 @@ export default function Dashboard() {
         50,
       );
 
-      // Apply confidence penalty - early high Sharpes get heavily discounted
-      const sharpeScore = rawSharpeScore * (0.3 + 0.7 * confidenceFactor);
+      // Apply confidence penalty - early high Sharpes get discounted
+      // Floor at 0.75 — competition is 7 weeks, no need to over-suppress mid-comp
+      const sharpeScore = rawSharpeScore * (0.75 + 0.25 * confidenceFactor);
 
       // 2. DRAWDOWN COMPONENT (30 points max)
       // Exponential penalty for drawdowns
       const rawDrawdownScore = Math.max(0, 30 * Math.exp(-maxDrawdown / 15));
 
       // Small sample penalty: if max DD is tiny, it might just be luck
-      // Penalize perfect scores early on
+      // Only apply a mild penalty — genuinely low drawdown should still be rewarded
       let drawdownScore = rawDrawdownScore;
-      if (maxDrawdown < 2.0 && confidenceFactor < 0.5) {
-        // Less than 2% drawdown with < 2 weeks data = probably just lucky
-        drawdownScore = rawDrawdownScore * 0.6; // 40% penalty
+      if (maxDrawdown < 1.0 && confidenceFactor < 0.3) {
+        // Near-zero drawdown with < 1 week data = likely not tested yet
+        drawdownScore = rawDrawdownScore * 0.85; // 15% penalty
       }
 
       // 3. VOLATILITY PENALTY (20 points max)
       // Low volatility early on suggests few trades or small positions
       const rawVolatilityScore = Math.max(0, 20 * Math.exp(-volatility / 20));
 
-      // Penalize artificially low volatility (< 15%) in early weeks
+      // Penalize artificially low volatility only in very early stages
+      // 10%+ vol is legitimate portfolio risk, not suspicious
       let volatilityScore = rawVolatilityScore;
-      if (volatility < 15 && confidenceFactor < 0.5) {
-        // Suspiciously low volatility = probably not enough trading
-        volatilityScore = rawVolatilityScore * 0.5; // 50% penalty
+      if (volatility < 5 && confidenceFactor < 0.3) {
+        // Near-zero volatility with < 1 week data = barely trading
+        volatilityScore = rawVolatilityScore * 0.7; // 30% penalty
       }
 
       const riskScore = Math.max(
@@ -836,159 +838,242 @@ export default function Dashboard() {
         Math.min(100, sharpeScore + drawdownScore + volatilityScore),
       );
 
-      // CONSISTENCY SCORE: Positive return ratio + volatility penalty (with recency weighting)
-      const consistencyHalfLifeDays = 14; // 2-week half-life for consistency
-      const consistencyHalfLifeMs = consistencyHalfLifeDays * oneDayMs;
+      // CONSISTENCY SCORE: Measures sustained green performance & sustainable growth
+      // 1. Daily win rate (40 pts) — aggregate hourly snapshots into actual daily returns
+      // 2. Equity curve smoothness / R² (35 pts) — how linear & steady is the growth
+      // 3. No big single-day drops (25 pts) — penalize large drawdown days
 
-      let weightedPositiveDays = 0;
-      let totalWeight = 0;
-
+      // Step 1: Aggregate hourly snapshots into daily returns
+      const dailyEquityMap = new Map<
+        string,
+        { first: number; last: number; firstTime: number; lastTime: number }
+      >();
       snapshots.forEach((snapshot) => {
-        const snapshotTime = snapshot.timestamp.getTime();
-        const ageMs = now - snapshotTime;
-
-        // Exponential decay: recent days weighted more heavily
-        const decayFactor = Math.exp(-ageMs / consistencyHalfLifeMs);
-
-        totalWeight += decayFactor;
-
-        if (snapshot.dailyReturn > 0) {
-          weightedPositiveDays += decayFactor;
+        const dayKey = snapshot.timestamp.toISOString().slice(0, 10);
+        const existing = dailyEquityMap.get(dayKey);
+        const time = snapshot.timestamp.getTime();
+        if (!existing) {
+          dailyEquityMap.set(dayKey, {
+            first: snapshot.totalEquity,
+            last: snapshot.totalEquity,
+            firstTime: time,
+            lastTime: time,
+          });
+        } else {
+          if (time < existing.firstTime) {
+            existing.first = snapshot.totalEquity;
+            existing.firstTime = time;
+          }
+          if (time > existing.lastTime) {
+            existing.last = snapshot.totalEquity;
+            existing.lastTime = time;
+          }
         }
       });
 
-      // CONSISTENCY SCORE calculation continues...
-      const weightedPositiveRatio =
-        totalWeight > 0 ? weightedPositiveDays / totalWeight : 0;
-      const volatilityPenalty = Math.min(volatility / 30, 1.0);
+      const sortedDays = [...dailyEquityMap.entries()].sort((a, b) =>
+        a[0].localeCompare(b[0]),
+      );
+      const dailyReturns: number[] = [];
+      const dailyEquities: number[] = [];
+
+      for (let i = 0; i < sortedDays.length; i++) {
+        const [, day] = sortedDays[i];
+        dailyEquities.push(day.last);
+        if (i === 0) {
+          // First day: return from open to close
+          const ret =
+            day.first > 0 ? ((day.last - day.first) / day.first) * 100 : 0;
+          dailyReturns.push(ret);
+        } else {
+          const prevClose = sortedDays[i - 1][1].last;
+          const ret =
+            prevClose > 0 ? ((day.last - prevClose) / prevClose) * 100 : 0;
+          dailyReturns.push(ret);
+        }
+      }
+
+      // COMPONENT 1: Daily Win Rate (40 points)
+      // What fraction of trading days ended green?
+      const greenDays = dailyReturns.filter((r) => r > 0).length;
+      const totalDays = dailyReturns.length;
+      const dailyWinRate = totalDays > 0 ? greenDays / totalDays : 0;
+      // Scale: 30% win rate = 0 pts, 50% = 20 pts, 70%+ = 40 pts
+      const winRateScore = Math.max(
+        0,
+        Math.min(40, ((dailyWinRate - 0.3) / 0.4) * 40),
+      );
+
+      // COMPONENT 2: Equity Curve Smoothness — R² (15 points)
+      // R² measures how well the equity curve fits a straight line
+      // R² = 1.0 means perfectly linear growth (ideal)
+      // R² = 0.0 means random noise (terrible)
+      let rSquared = 0;
+      if (dailyEquities.length >= 3) {
+        const n = dailyEquities.length;
+        const xMean = (n - 1) / 2;
+        const yMean = dailyEquities.reduce((sum, v) => sum + v, 0) / n;
+
+        let ssTotal = 0;
+        let ssResidual = 0;
+        let sxy = 0;
+        let sxx = 0;
+
+        for (let i = 0; i < n; i++) {
+          sxy += (i - xMean) * (dailyEquities[i] - yMean);
+          sxx += (i - xMean) * (i - xMean);
+          ssTotal += (dailyEquities[i] - yMean) * (dailyEquities[i] - yMean);
+        }
+
+        const slope = sxx > 0 ? sxy / sxx : 0;
+        const intercept = yMean - slope * xMean;
+
+        for (let i = 0; i < n; i++) {
+          const predicted = intercept + slope * i;
+          ssResidual +=
+            (dailyEquities[i] - predicted) * (dailyEquities[i] - predicted);
+        }
+
+        rSquared = ssTotal > 0 ? Math.max(0, 1 - ssResidual / ssTotal) : 0;
+
+        // Only reward R² if the slope is positive (growing, not consistently losing)
+        if (slope <= 0) {
+          rSquared = rSquared * 0.2; // Heavy discount for consistent losses
+        }
+      }
+      const smoothnessScore = rSquared * 15;
+
+      // COMPONENT 3: No Big Drop Days (25 points)
+      // Penalize days with large negative returns — sustainable growth means no blowups
+      let bigDropPenalty = 0;
+      dailyReturns.forEach((ret) => {
+        if (ret < -3) {
+          // Each day worse than -3% adds penalty, exponentially for bigger drops
+          bigDropPenalty += Math.pow(Math.abs(ret) - 3, 1.5) * 3;
+        }
+      });
+      const noDropScore = Math.max(0, 25 - bigDropPenalty);
+
+      // COMPONENT 4: Green Streak Bonus (20 points)
+      // Reward consecutive green days — sustained momentum shows real consistency
+      let currentStreak = 0;
+      let longestStreak = 0;
+      dailyReturns.forEach((ret) => {
+        if (ret > 0) {
+          currentStreak++;
+          longestStreak = Math.max(longestStreak, currentStreak);
+        } else {
+          currentStreak = 0;
+        }
+      });
+      // 2 consecutive green days = 10 pts, 3 = 15 pts, 4+ = 20 pts
+      const streakScore = Math.min(20, (longestStreak / 4) * 20);
+
       const consistencyScore = Math.max(
         0,
         Math.min(
           100,
-          weightedPositiveRatio * 60 + (1 - volatilityPenalty) * 40,
+          winRateScore + smoothnessScore + noDropScore + streakScore,
         ),
       );
 
-      // ACTIVITY SCORE: Time-decayed trades + diversification + trading frequency regularity
-      const halfLifeDays = 7; // Activity "half-life" of 7 days
-      const halfLifeMs = halfLifeDays * oneDayMs;
+      // ACTIVITY SCORE: Portfolio management behaviour
+      // Measures whether you're acting like a portfolio manager, not a day trader
+      // 1. Portfolio Breadth (35 pts) — diversified holdings across symbols
+      // 2. Engagement Regularity (35 pts) — active on multiple trading days, spread out
+      // 3. Rebalancing Behaviour (30 pts) — buying AND selling, adjusting positions
 
-      let weightedTradeCount = 0;
-      const tradeDays = new Set<string>(); // Track unique trading days
-      const tradeTimestamps: number[] = [];
+      const tradeDays = new Set<string>();
+      const symbolsBought = new Set<string>();
+      const symbolsSold = new Set<string>();
+      const tradesByDay = new Map<string, number>();
 
-      // Calculate weighted trade count with exponential decay
       trades.forEach((trade: any) => {
         const tradeTime = new Date(
           trade.placed_at ?? trade.filled_at ?? now,
         ).getTime();
-        const ageMs = now - tradeTime;
-
-        // Exponential decay: weight = e^(-age / halfLife)
-        const decayFactor = Math.exp(-ageMs / halfLifeMs);
-        weightedTradeCount += decayFactor;
-
-        // Track trade day (for frequency analysis)
         const tradeDay = new Date(tradeTime).toISOString().slice(0, 10);
         tradeDays.add(tradeDay);
+        tradesByDay.set(tradeDay, (tradesByDay.get(tradeDay) ?? 0) + 1);
 
-        // Store timestamp for regularity calculation
-        tradeTimestamps.push(tradeTime);
+        const symbol = (trade.symbol ?? "").toUpperCase().trim();
+        const side = (trade.side ?? "buy").toLowerCase();
+        if (side === "buy") {
+          symbolsBought.add(symbol);
+        } else {
+          symbolsSold.add(symbol);
+        }
       });
 
-      // 1. WEIGHTED TRADE VOLUME (30 points, asymptotic - no hard cap)
-      // Uses logarithmic scaling to prevent hard cap but with diminishing returns
-      // log(1 + x) / log(1 + target) where target = 50 weighted trades
-      // This means: 50 weighted trades ≈ 30 points, 100 ≈ 37 points, 200 ≈ 44 points
-      const targetWeightedTrades = 50;
-      const volumeScore = Math.min(
-        (Math.log(1 + weightedTradeCount) /
-          Math.log(1 + targetWeightedTrades)) *
-          30,
-        45, // Soft cap at 45 to leave room for other components
+      // 1. PORTFOLIO BREADTH (35 points)
+      // How many unique symbols have you traded? A PM builds a diversified portfolio.
+      // 5 symbols = 17.5 pts, 8 symbols = 28 pts, 10+ symbols = 35 pts
+      const targetSymbols = 10;
+      const breadthScore = Math.min(
+        35,
+        (allTimeUniqueSymbols / targetSymbols) * 35,
       );
 
-      // 2. TRADING REGULARITY (40 points) - Punishes both overtrading AND undertrading
-      let regularityScore = 0;
+      // 2. ENGAGEMENT REGULARITY (35 points)
+      // What fraction of available trading days have you been active?
+      // A PM checks in and manages regularly, not just once then forgets.
+      const competitionStartDate = new Date("2026-02-02");
+      const daysSinceStart = Math.max(
+        1,
+        Math.floor((now - competitionStartDate.getTime()) / oneDayMs),
+      );
+      // Approximate trading days (exclude weekends: ~5/7 of calendar days)
+      const approxTradingDays = Math.max(
+        1,
+        Math.floor(daysSinceStart * (5 / 7)),
+      );
+      const activeDayRatio = Math.min(1, tradeDays.size / approxTradingDays);
+      // Scale: 30% of days active = 0 pts, 60% = 17.5 pts, 90%+ = 35 pts
+      const engagementScore = Math.max(
+        0,
+        Math.min(35, ((activeDayRatio - 0.3) / 0.6) * 35),
+      );
 
-      if (tradeTimestamps.length >= 2) {
-        // Calculate time intervals between consecutive trades
-        const sortedTimestamps = [...tradeTimestamps].sort((a, b) => a - b);
-        const intervals: number[] = [];
+      // 3. REBALANCING BEHAVIOUR (30 points)
+      // A PM doesn't just buy — they trim winners, cut losers, and rebalance.
+      // Reward both buying AND selling, and selling multiple symbols.
 
-        for (let i = 1; i < sortedTimestamps.length; i++) {
-          const intervalDays =
-            (sortedTimestamps[i] - sortedTimestamps[i - 1]) / oneDayMs;
-          intervals.push(intervalDays);
+      // a) Buy/sell balance (15 pts): Do you have both buys and sells?
+      const totalTrades = trades.length;
+      const sellTrades = trades.filter(
+        (t: any) => (t.side ?? "buy").toLowerCase() === "sell",
+      ).length;
+      const buyTrades = totalTrades - sellTrades;
+      // Ideal ratio: 30-70% sells (meaning you're trimming/rebalancing, not just buying)
+      let buySellScore = 0;
+      if (totalTrades > 0 && sellTrades > 0) {
+        const sellRatio = sellTrades / totalTrades;
+        if (sellRatio >= 0.15 && sellRatio <= 0.7) {
+          // Sweet spot: active rebalancing
+          buySellScore = 15;
+        } else if (sellRatio < 0.15) {
+          // Barely selling — mostly buy and hold
+          buySellScore = (sellRatio / 0.15) * 10;
+        } else {
+          // Too much selling — liquidating, not managing
+          buySellScore = Math.max(0, 15 - ((sellRatio - 0.7) / 0.3) * 15);
         }
-
-        // Calculate coefficient of variation (CV) of intervals
-        // CV = stddev / mean - measures consistency
-        // Low CV = consistent trading pattern (good)
-        // High CV = erratic trading (bad)
-        const meanInterval =
-          intervals.reduce((sum, val) => sum + val, 0) / intervals.length;
-        const variance =
-          intervals.reduce(
-            (sum, val) => sum + Math.pow(val - meanInterval, 2),
-            0,
-          ) / intervals.length;
-        const stdDev = Math.sqrt(variance);
-        const coefficientOfVariation =
-          meanInterval > 0 ? stdDev / meanInterval : 10;
-
-        // OPTIMAL TRADING FREQUENCY: 2-5 trades per week (mean interval 1.4 - 3.5 days)
-        const optimalMinInterval = 1.4; // ~5 trades/week
-        const optimalMaxInterval = 3.5; // ~2 trades/week
-
-        // Penalty for mean interval outside optimal range
-        let frequencyPenalty = 0;
-        if (meanInterval < optimalMinInterval) {
-          // Day trading penalty: exponential punishment for overtrading
-          frequencyPenalty =
-            Math.pow(
-              (optimalMinInterval - meanInterval) / optimalMinInterval,
-              1.5,
-            ) * 20;
-        } else if (meanInterval > optimalMaxInterval) {
-          // Inactivity penalty: exponential punishment for undertrading
-          frequencyPenalty =
-            Math.pow(
-              (meanInterval - optimalMaxInterval) / optimalMaxInterval,
-              1.2,
-            ) * 20;
-        }
-
-        // Consistency score: penalize high CV (erratic trading)
-        // CV < 1.0 = excellent consistency
-        // CV > 2.0 = poor consistency
-        const consistencyPenalty =
-          Math.min(coefficientOfVariation / 2.0, 1.0) * 15;
-
-        // Calculate regularity score with penalties
-        regularityScore = Math.max(
-          0,
-          40 - frequencyPenalty - consistencyPenalty,
-        );
-      } else if (tradeTimestamps.length === 1) {
-        // Single trade: moderate penalty for inactivity
-        regularityScore = 10;
-      } else {
-        // No trades: maximum penalty
-        regularityScore = 0;
+      } else if (totalTrades > 0 && sellTrades === 0) {
+        // Only buying, no rebalancing at all
+        buySellScore = 3;
       }
 
-      // 3. DIVERSIFICATION (30 points, asymptotic - no hard cap)
-      // Similar logarithmic scaling: 15 symbols ≈ 30 points, 30 ≈ 37 points, 60 ≈ 44 points
-      const targetSymbols = 15;
-      const diversificationScore = Math.min(
-        (Math.log(1 + allTimeUniqueSymbols) / Math.log(1 + targetSymbols)) * 30,
-        45, // Soft cap
-      );
+      // b) Sell diversity (15 pts): Are you trimming across multiple positions?
+      // Selling 1 symbol = 5 pts, 3 symbols = 15 pts
+      const sellDiversityScore = Math.min(15, (symbolsSold.size / 3) * 15);
 
-      // TOTAL ACTIVITY SCORE (max theoretical ≈ 100, but soft-capped at ~115 for exceptional performance)
-      const activityScore =
-        volumeScore + regularityScore + diversificationScore;
+      const rebalancingScore = buySellScore + sellDiversityScore;
+
+      // TOTAL ACTIVITY SCORE
+      const activityScore = Math.min(
+        100,
+        breadthScore + engagementScore + rebalancingScore,
+      );
 
       // TOTAL SCORE: Returns weighted at 50%
       const totalScore =
