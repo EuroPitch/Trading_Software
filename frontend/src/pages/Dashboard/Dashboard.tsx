@@ -759,12 +759,12 @@ export default function Dashboard() {
     ): CompetitionScore => {
       const now = Date.now();
       const oneDayMs = 24 * 60 * 60 * 1000;
-      // RETURN SCORE: Asymmetric penalty for losses (losses hurt 3x more)
-      // Range: -16.67% return = 0, 0% = 50, +16.67% = 100
+      // RETURN SCORE: Asymmetric penalty for losses (losses hurt 2x more)
+      // Range: -8.33% return = 0, 0% = 50, +16.67% = 100
       const returnScore =
         totalReturn >= 0
           ? Math.min(100, 50 + totalReturn * 3)
-          : Math.max(0, 50 + totalReturn * 9); // 9 = 3x penalty multiplier
+          : Math.max(0, 50 + totalReturn * 6); // 6 = 2x penalty multiplier
 
       // RISK SCORE: Sharpe ratio (50%) + drawdown management (30%) + volatility penalty (20%)
 
