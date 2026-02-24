@@ -1,5 +1,6 @@
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from typing import List, Optional
 import logging
 import asyncio
@@ -17,12 +18,8 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://trading.europitch.eu",
-        "http://localhost:5173",
-        "http://localhost:3000",
-    ],
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -63,10 +60,17 @@ def get_universe():
 
 @app.get("/equities/quotes")
 def get_quotes(symbols: List[str] = Query(None)):
-    if not symbols:
-        symbols = service.symbols
-    data = service.get_snapshot(symbols)
-    return {"data": data}
+    try:
+        if not symbols:
+            symbols = service.symbols
+        data = service.get_snapshot(symbols)
+        return {"data": data}
+    except Exception as e:
+        logger.error(f"Error in /equities/quotes: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"error": f"Failed to fetch quotes: {str(e)}"},
+        )
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
