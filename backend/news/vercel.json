@@ -8,7 +8,13 @@
   "routes": [
     {
       "src": "/(.*)",
-      "dest": "main.py"
+      "dest": "main.py",
+      "headers": {
+        "Access-Control-Allow-Origin": "https://trading.europitch.eu",
+        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+        "Access-Control-Allow-Headers": "*",
+        "Access-Control-Allow-Credentials": "true"
+      }
     }
   ]
 }
