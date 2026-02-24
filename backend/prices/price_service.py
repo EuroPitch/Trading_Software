@@ -307,33 +307,33 @@ class PriceService:
                         # Calculate RSI
                         rsi_val = self._calculate_rsi(sym_hist, prev_close)
                         
-                        # Store in cache
+                        # Store in cache (sanitize all numeric values for JSON safety)
                         self.fundamental_cache[sym] = {
                             "history": sym_hist,
                             "constants": {
-                                "market_cap": market_cap,
-                                "prev_close": prev_close,
+                                "market_cap": self._safe_float(market_cap),
+                                "prev_close": self._safe_float(prev_close),
                                 "sector": "Unknown",
-                                "pe_ratio": pe_ratio,
-                                "pb_ratio": pb_ratio,
-                                "peg_ratio": peg_ratio,
-                                "dividend_yield": dividend_yield,
-                                "roe": roe,
-                                "roa": roa,
-                                "debt_to_equity": debt_to_equity,
-                                "current_ratio": current_ratio,
-                                "quick_ratio": quick_ratio,
-                                "gross_margin": gross_margin,
-                                "operating_margin": operating_margin,
-                                "profit_margin": profit_margin,
-                                "revenue_growth": revenue_growth,
-                                "earnings_growth": earnings_growth,
-                                "volume": volume,
-                                "avg_volume": avg_volume,
-                                "beta": beta,
-                                "52week_high": week52_high,
-                                "52week_low": week52_low,
-                                "rsi": round(rsi_val, 2) if rsi_val else None,
+                                "pe_ratio": self._safe_float(pe_ratio),
+                                "pb_ratio": self._safe_float(pb_ratio),
+                                "peg_ratio": self._safe_float(peg_ratio),
+                                "dividend_yield": self._safe_float(dividend_yield),
+                                "roe": self._safe_float(roe),
+                                "roa": self._safe_float(roa),
+                                "debt_to_equity": self._safe_float(debt_to_equity),
+                                "current_ratio": self._safe_float(current_ratio),
+                                "quick_ratio": self._safe_float(quick_ratio),
+                                "gross_margin": self._safe_float(gross_margin),
+                                "operating_margin": self._safe_float(operating_margin),
+                                "profit_margin": self._safe_float(profit_margin),
+                                "revenue_growth": self._safe_float(revenue_growth),
+                                "earnings_growth": self._safe_float(earnings_growth),
+                                "volume": self._safe_int(volume),
+                                "avg_volume": self._safe_int(avg_volume),
+                                "beta": self._safe_float(beta),
+                                "52week_high": self._safe_float(week52_high),
+                                "52week_low": self._safe_float(week52_low),
+                                "rsi": round(self._safe_float(rsi_val), 2) if self._safe_float(rsi_val) is not None else None,
                             }
                         }
                         
@@ -373,6 +373,30 @@ class PriceService:
         except:
             return None
 
+    def _safe_float(self, val):
+        """Convert numpy/pandas types to JSON-safe Python floats. Returns None for NaN/inf."""
+        if val is None:
+            return None
+        try:
+            f = float(val)
+            if f != f or f == float('inf') or f == float('-inf'):  # NaN or inf
+                return None
+            return f
+        except (TypeError, ValueError):
+            return None
+
+    def _safe_int(self, val):
+        """Convert numpy/pandas types to JSON-safe Python ints. Returns None on failure."""
+        if val is None:
+            return None
+        try:
+            f = float(val)
+            if f != f or f == float('inf') or f == float('-inf'):
+                return None
+            return int(f)
+        except (TypeError, ValueError):
+            return None
+
     def get_snapshot(self, requested_symbols):
         """Returns the full state for the initial REST load."""
         response = {}
@@ -385,7 +409,8 @@ class PriceService:
             if not price:
                 price = constants.get("prev_close", 0.0)
             
-            prev_close = constants.get("prev_close", 0.0)
+            price = self._safe_float(price) or 0.0
+            prev_close = self._safe_float(constants.get("prev_close", 0.0)) or 0.0
             change = 0.0
             change_p = 0.0
             
@@ -400,27 +425,27 @@ class PriceService:
                 "change": round(change, 2),
                 "change_percent": round(change_p, 2),
                 "sector": constants.get("sector", "Unknown"),
-                "market_cap": constants.get("market_cap"),
-                "pe_ratio": constants.get("pe_ratio"),
-                "price_to_book": constants.get("pb_ratio"),
-                "peg_ratio": constants.get("peg_ratio"),
-                "dividend_yield": constants.get("dividend_yield"),
-                "roe": constants.get("roe"),
-                "roa": constants.get("roa"),
-                "debt_to_equity": constants.get("debt_to_equity"),
-                "current_ratio": constants.get("current_ratio"),
-                "quick_ratio": constants.get("quick_ratio"),
-                "gross_margin": constants.get("gross_margin"),
-                "operating_margin": constants.get("operating_margin"),
-                "profit_margin": constants.get("profit_margin"),
-                "revenue_growth": constants.get("revenue_growth"),
-                "earnings_growth": constants.get("earnings_growth"),
-                "volume": constants.get("volume"),
-                "avg_volume": constants.get("avg_volume"),
-                "beta": constants.get("beta"),
-                "52week_high": constants.get("52week_high"),
-                "52week_low": constants.get("52week_low"),
-                "rsi": constants.get("rsi"),
+                "market_cap": self._safe_float(constants.get("market_cap")),
+                "pe_ratio": self._safe_float(constants.get("pe_ratio")),
+                "price_to_book": self._safe_float(constants.get("pb_ratio")),
+                "peg_ratio": self._safe_float(constants.get("peg_ratio")),
+                "dividend_yield": self._safe_float(constants.get("dividend_yield")),
+                "roe": self._safe_float(constants.get("roe")),
+                "roa": self._safe_float(constants.get("roa")),
+                "debt_to_equity": self._safe_float(constants.get("debt_to_equity")),
+                "current_ratio": self._safe_float(constants.get("current_ratio")),
+                "quick_ratio": self._safe_float(constants.get("quick_ratio")),
+                "gross_margin": self._safe_float(constants.get("gross_margin")),
+                "operating_margin": self._safe_float(constants.get("operating_margin")),
+                "profit_margin": self._safe_float(constants.get("profit_margin")),
+                "revenue_growth": self._safe_float(constants.get("revenue_growth")),
+                "earnings_growth": self._safe_float(constants.get("earnings_growth")),
+                "volume": self._safe_int(constants.get("volume")),
+                "avg_volume": self._safe_int(constants.get("avg_volume")),
+                "beta": self._safe_float(constants.get("beta")),
+                "52week_high": self._safe_float(constants.get("52week_high")),
+                "52week_low": self._safe_float(constants.get("52week_low")),
+                "rsi": self._safe_float(constants.get("rsi")),
             }
         
         return response
