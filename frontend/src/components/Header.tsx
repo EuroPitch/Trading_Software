@@ -216,19 +216,19 @@ const Header = () => {
                   </div>
                   <div className="dropdown-divider"></div>
                   <div className="dropdown-item">
-                    <span className="dropdown-label">Return (40%)</span>
+                    <span className="dropdown-label">Return (50%)</span>
                     <span className="dropdown-value">
                       {competitionScore.returnScore}
                     </span>
                   </div>
                   <div className="dropdown-item">
-                    <span className="dropdown-label">Risk (30%)</span>
+                    <span className="dropdown-label">Risk (25%)</span>
                     <span className="dropdown-value">
                       {competitionScore.riskScore}
                     </span>
                   </div>
                   <div className="dropdown-item">
-                    <span className="dropdown-label">Consistency (20%)</span>
+                    <span className="dropdown-label">Consistency (15%)</span>
                     <span className="dropdown-value">
                       {competitionScore.consistencyScore}
                     </span>
